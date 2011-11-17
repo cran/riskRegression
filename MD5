@@ -1,4 +1,4 @@
-6d2f9bc19de0fb61ba694732bf139a29 *DESCRIPTION
+808bb8a065c9a87ccc5b8a179b655be0 *DESCRIPTION
 511d652a0e05db846c481f71b77e6059 *NAMESPACE
 ace1b1a6f2140d8ae1378c456ceecdd0 *R/ARR.R
 92f479463f375a8cfeb178cd1f3c8e2e *R/CSC.R
@@ -34,13 +34,13 @@ eecd862b5ff6df15fb365842f05db700 *R/timevarCoefList.R
 684cdb390f5305469268edf1b4e1ff7a *R/timevarCoefMatrix.R
 1c7de08aa5ce468a690c40da312e983c *data/Melanoma.rda
 a0b10985db64abbcaf610954e2c57969 *examples/Illustration-AbsoluteRiskRegression-MelanomaData.R
-c137cfb3cad1b2533e860dcf03c638be *man/CSC.Rd
-a90c2804cd8f3d3f7515ddf9f405d852 *man/FGR.Rd
+5535fc3201e3bcef3052526b7e3089aa *man/CSC.Rd
+111abe3b858f7a74ecc07449f130c1ac *man/FGR.Rd
 9fbe8322ff9dca1d2e95166b90eac37a *man/Melanoma.Rd
 b6efd30868245c3dcdd47f644818a3d7 *man/plot.riskRegression.Rd
 bb5f8ef137960c4e9ab9b886e6870881 *man/plotEffects.Rd
 58a85178be245d54d34ccd36fb44b675 *man/predict.riskRegression.Rd
-dc74832d6e0c4e66890106a5c91220e1 *man/riskRegression.Rd
+eb4daad624e504245802a51a2d0172c1 *man/riskRegression.Rd
 adb8f833370f9ac42bbe9c591818cde2 *man/subjectWeights.Rd
 309efa11683366f431d12ebee61d0d56 *prepareData/Melanoma.R
 89cb1cf56e21399ad6fed7283b06a0b6 *prepareData/Melanoma.csv
