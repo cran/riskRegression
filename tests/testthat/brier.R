@@ -9,7 +9,7 @@ test_that("predictions",{
     p2 <- predict(f2,newdata=Melanoma,times=c(0,1,100,1000))
 }
 
-ptest_that("Brier score",{
+test_that("Brier score",{
     library(riskRegression)
     data(Melanoma)
     fit.lrr <- LRR(Hist(time,status)~thick,data=Melanoma,cause=1)

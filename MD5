@@ -1,4 +1,4 @@
-23e4988a5054bc18691b829077b7e3a5 *DESCRIPTION
+ad9b6b68020b8361ceb73b1fea18d0e0 *DESCRIPTION
 8db6ddc58f8a7fcfd4ac559fa6e42a4e *NAMESPACE
 ec88fb840854454f40263b1d0944e0a0 *R/ARR.R
 5ffd038df36be376985f5a63851d01e1 *R/CSC.R
@@ -14,7 +14,7 @@ d440bcaff754a4d48912754a8baa8f7a *R/plot.riskRegression.R
 49cfe0fd9de23ce4938b0fe5f659fceb *R/plotCoef.R
 592c3f0907276b00768b3d29a231b291 *R/plotEffects.R
 f52028fb6ff4e8c338685551526ecff1 *R/predict.CauseSpecificCox.R
-ebbd0a25124ad13788c255c95a46f3b3 *R/predict.FGR.R
+67eb9ec3120fa97a16f0247bb2bf6e99 *R/predict.FGR.R
 4dcafdf59d34e2fd1f6afade6cb985be *R/predict.riskRegression.R
 9e1b426aa8eaa2c351feb1a746db37c8 *R/print.CauseSpecificCox.R
 fe408b4e19e073ad569cf0f32cdeaff6 *R/print.FGR.R
@@ -22,7 +22,7 @@ fe408b4e19e073ad569cf0f32cdeaff6 *R/print.FGR.R
 44002f1719d4566ea9b003cc9828f845 *R/print.subjectWeights.R
 3da82bd1ed0b84af214b83f9ad13c382 *R/print.timevarCoefList.R
 bc3298e3d1e881f9af7e5eab12127d47 *R/riskRegression-package.R
-97c4078002e293aaa17f3e026e8e09e0 *R/riskRegression.R
+9a8a0ee6998773956a46d76934a94129 *R/riskRegression.R
 11ef09e16edce9c6532451b208770074 *R/subjectWeights.R
 b0e47c9cd907cd465685d8373a609c46 *R/summary.FGR.R
 1dfe7bf4eb4e9a055329eb005a4f7cfe *R/summary.riskRegression.R
@@ -42,11 +42,11 @@ d3988ab739ca10a2e2e43213a14c8dae *man/plotEffects.Rd
 384fbe8719b09c914e791306ff931fb2 *src/comptestfunc.c
 8b0e42205ea285369fc6d48c2b9f7086 *src/itfit.c
 4d364354c9672392f9a06f61772eb941 *src/itfitsemi.c
-0cfae00011fd51fa9a1ee77d4994e742 *src/matrix.c
+2e95739991fe261d1985c6f5b87b21ea *src/matrix.c
 5de0d409925d032979007dcf766ee2c8 *src/matrix.h
 b970d9fec0c580a6020d204ce36afc86 *src/riskregression.h
 d41d8cd98f00b204e9800998ecf8427e *tests/test-FGR.R
 bd6d588ab745d3b219304a4db3aebd04 *tests/testthat/BinomialRegression.R
 620e62ea0098fe5b82806ec51f2927c1 *tests/testthat/CauseSpecificCoxRegression.R
 2eb4170d7bed51350ed392469d85eb55 *tests/testthat/FineGrayRegression.R
-3118731bc7368ed4cff8120b46bd7a32 *tests/testthat/brier.R
+f4bf506595dc2ac0e67e1788d8dc9d97 *tests/testthat/brier.R
