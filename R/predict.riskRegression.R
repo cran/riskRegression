@@ -20,6 +20,7 @@
 ##' 
 ##' data(Melanoma)
 ##' library(prodlim)
+##' library(survival)
 ##' 
 ##' fit.tarr <- ARR(Hist(time,status)~age+invasion+strata(sex),data=Melanoma,cause=1)
 ##' predict(fit.tarr,newdata=data.frame(age=48,
@@ -37,7 +38,7 @@
 ##' predict(fit.tarr,newdata=Melanoma[1:4,])
 ##'
 ##' 
-#' @S3method predict riskRegression
+#' @export 
 predict.riskRegression <- function(object,
                                    newdata,
                                    ...){
@@ -52,7 +53,7 @@ predict.riskRegression <- function(object,
     ## }
     Zcoef <- c(object$timeConstantEffects$coef)
     semi <- !is.null(Zcoef)
-    ## m <- model.frame(formula=delete.response(object$design$Terms),
+    ## m <- stats::model.frame(formula=delete.response(object$design$Terms),
     ## data=newdata,na.action="na.fail")
     tt <- delete.response(object$design$Terms)
     PF <- prodlim::EventHistory.frame(formula(tt),

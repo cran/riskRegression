@@ -59,6 +59,7 @@
 ##' # Single binary factor
 ##' 
 ##' ## absolute risk regression
+##' library(survival)
 ##' library(prodlim)
 ##' fit.arr <- ARR(Hist(time,status)~sex,data=Melanoma,cause=1)
 ##' print(fit.arr)
@@ -341,16 +342,18 @@ riskRegression <- function(formula,
     }
     else
         cens.formula <- update(cens.formula,NULL~.)
-    iFormula <- update(cens.formula,"survival::Surv(time,status)~.")
     if (missing(cens.model)) cens.model <- "KM"
-    imodel <- switch(tolower(cens.model),"km"="marginal","cox"="cox","aalen"="aalen","uncensored"="none")
+    imodel <- switch(tolower(cens.model),"km"="marginal","cox"="cox","forest"="forest","aalen"="aalen","uncensored"="none")
+    if (imodel == "cox")
+        iFormula <- update(cens.formula,"survival::Surv(time,status)~.")
+    else
+        iFormula <- update(cens.formula,"Surv(time,status)~.")
     if (imodel=="marginal")
         iData <- data.frame(event.history)
     else{
         iData <- cbind(event.history,get_all_vars(cens.formula,
-                                                  data)[neworder,])
+                                                  data)[neworder,,drop=FALSE])
     }
-    ## browser()
     stopifnot(NROW(iData)==NROW(event.history))
     Gcx <- subjectWeights(formula=iFormula,
                           data=iData,

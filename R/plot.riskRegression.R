@@ -74,6 +74,7 @@
 ##' @examples
 ##' 
 ##' library(pec)
+##' library(survival)
 ##' library(prodlim)
 ##' data(Melanoma)
 ##' 
@@ -84,7 +85,7 @@
 ##' plot(fit.csc)
 ##' 
 ##' 
-#' @S3method plot riskRegression
+#' @export 
 plot.riskRegression <- function(x,
                                 cause,
                                 newdata,
@@ -116,7 +117,7 @@ plot.riskRegression <- function(x,
                     p1 <- pec::predictEventProb(x,newdata=xdat,times=plot.times,cause=cause)
                 }
                 else{
-                    p1 <- predict(x,newdata=xdat,times=plot.times)$risk}
+                    p1 <- stats::predict(x,newdata=xdat,times=plot.times)$risk}
                 rownames(p1) <- paste("id",1:NROW(xdat))
             }
             else{
@@ -127,7 +128,7 @@ plot.riskRegression <- function(x,
                                            cause=cause)
                 }
                 else{
-                    P1 <- predict(x,
+                    P1 <- stats::predict(x,
                                   newdata=eval(x$call$data),
                                   times=plot.times)$risk
                 }
@@ -141,7 +142,7 @@ plot.riskRegression <- function(x,
             }
         }
         else{
-            p1 <- predict(x,newdata=newdata,time=plot.times)$risk
+            p1 <- stats::predict(x,newdata=newdata,time=plot.times)$risk
         }
         Y <- lapply(1:NROW(p1),function(i){p1[i,]})
         if (!is.null(rownames(p1)))
