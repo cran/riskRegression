@@ -39,14 +39,22 @@
 ##' @examples
 ##' 
 ##' data(Melanoma)
-#' @importFrom survival Surv
-#' @importFrom survival coxph
-#' @importFrom prodlim Hist
-#' @importFrom grDevices col2rgb
-#' @importFrom graphics plot abline lines polygon par
-#' @importFrom stats as.formula delete.response formula get_all_vars median na.omit pnorm qnorm quantile reformulate terms terms.formula time update update.formula
-
-#' @useDynLib riskRegression
+#'
+#' @docType package
+#' @name riskRegression
+#' @useDynLib riskRegression, .registration=TRUE
+#' @importFrom Rcpp sourceCpp evalCpp
+#' @importFrom rms strat cph
+#' @importFrom ggplot2 aes aes_string element_blank element_line element_rect geom_errorbar geom_line geom_point geom_ribbon ggplot scale_colour_manual scale_fill_manual scale_y_continuous theme theme_bw "%+replace%" xlab
+#' @importFrom survival Surv strata coxph
+#' @importFrom lava transform<-
+#' @importFrom data.table as.data.table copy data.table is.data.table melt rbindlist setnames setorder setcolorder setkey ":=" ".N" ".SD"
+#' @importFrom prodlim Hist dimColor prodlim
+#' @importFrom foreach "%dopar%" foreach
+#' @importFrom cmprsk predict.crr
+#' @importFrom prodlim Hist jackknife prodlim sindex
+#' @importFrom grDevices col2rgb gray
+#' @importFrom graphics bxp  abline axis box legend lines mtext par plot points segments text title polygon par boxplot
+#' @importFrom utils capture.output find head select.list tail
+#' @importFrom stats as.formula coef delete.response drop.terms family formula get_all_vars glm median model.frame model.matrix model.response na.fail na.omit pnorm predict qnorm quantile rbinom reformulate rexp runif sd setNames smooth terms terms.formula time uniroot update update.formula var wilcox.test
 NULL
-
-

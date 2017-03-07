@@ -3,39 +3,9 @@
 #' Show predicted risk obtained by a risk prediction model as a function of
 #' time.
 #' 
-#' @aliases plot.riskRegression plot.predictedRisk plot.CauseSpecificCox
+#' @aliases plot.riskRegression 
 #' @usage
 #' \method{plot}{riskRegression}(x,
-##'   cause,
-##'   newdata,
-##'   xlab,
-##'   ylab,
-##'   xlim,
-##'   ylim,
-##'   lwd,
-##'   col,
-##'   lty,
-##'   axes=TRUE,
-##'   percent=TRUE,
-##'   legend=TRUE,
-##'   add=FALSE,
-##'   ...)
-#' \method{plot}{CauseSpecificCox}(x,
-##'   cause,
-##'   newdata,
-##'   xlab,
-##'   ylab,
-##'   xlim,
-##'   ylim,
-##'   lwd,
-##'   col,
-##'   lty,
-##'   axes=TRUE,
-##'   percent=TRUE,
-##'   legend=TRUE,
-##'   add=FALSE,
-##'   ...)
-#' \method{plot}{predictedRisk}(x,
 ##'   cause,
 ##'   newdata,
 ##'   xlab,
@@ -73,16 +43,12 @@
 #' @keywords survival
 ##' @examples
 ##' 
-##' library(pec)
 ##' library(survival)
 ##' library(prodlim)
 ##' data(Melanoma)
 ##' 
 ##' fit.arr <- ARR(Hist(time,status)~invasion+age+strata(sex),data=Melanoma,cause=1)
 ##' plot(fit.arr)
-##' 
-##' fit.csc <- CSC(Hist(time,status)~invasion+age+sex,data=Melanoma,cause=1)
-##' plot(fit.csc)
 ##' 
 ##' 
 #' @export 
@@ -102,7 +68,7 @@ plot.riskRegression <- function(x,
                                 add=FALSE,
                                 ...){
     # {{{ getting predicted risk
-    if (class(x)=="CauseSpecificCox")
+    if ("CauseSpecificCox"%in%class(x))
         plot.times <- x$eventTimes
     else
         plot.times <- x$time
@@ -113,16 +79,16 @@ plot.riskRegression <- function(x,
             ff <- eval(x$call$formula)
             xdat <- unique(eval(x$call$data)[all.vars(update(ff,NULL~.))])
             if (NROW(xdat)<5){
-                if (class(x)=="CauseSpecificCox"){
-                    p1 <- pec::predictEventProb(x,newdata=xdat,times=plot.times,cause=cause)
+                if ("CauseSpecificCox"%in%class(x)){
+                    p1 <- predictRisk(x,newdata=xdat,times=plot.times,cause=cause)
                 }
                 else{
                     p1 <- stats::predict(x,newdata=xdat,times=plot.times)$risk}
                 rownames(p1) <- paste("id",1:NROW(xdat))
             }
             else{
-                if (class(x)=="CauseSpecificCox"){
-                    P1 <- pec::predictEventProb(x,
+                if ("CauseSpecificCox"%in%class(x)){
+                    P1 <- predictRisk(x,
                                            newdata=eval(x$call$data),
                                            times=plot.times,
                                            cause=cause)

@@ -1,4 +1,12 @@
-#' @export 
+#' Print subject weights
+#'
+#' Print subject weights
+#' @param x Subject weights
+#' @param digits Digits
+#' @param ... not used
+#'
+#' @method print subjectWeights
+#' @export
 print.subjectWeights <- function(x,digits=3,...){
   cat("\nEstimated inverse of the probability of censoring weights (subjectWeights)\n\n")
   method=switch(x$method,

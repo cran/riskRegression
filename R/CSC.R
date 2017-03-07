@@ -2,11 +2,18 @@
 #' 
 #' Interface for fitting cause-specific Cox proportional hazard regression
 #' models in competing risk.
-#' 
-#' @param formula A list of formulae, one for each cause, each
-#' specifying a cause-specific Cox regression model.
+#'
+#' The causes and their order
+#' are determined by \code{prodlim::getStates()} applied to the Hist object.
+#' @param formula Either a single \code{Hist} formula or a list of formulas. 
+#' If it is a list it must contain as many \code{Hist} formulas as there are
+#' causes when \code{survtype="hazard"} and exactly two formulas when \code{survtype="survival"}.
+#' If it is a list the first formula is used for the cause of interest specific Cox regression
+#' and the other formula(s) either for the other cause specific Cox regression(s) or for the
+#' Cox regression of the combined event where each cause counts as event. Note that when only one
+#' formula is given the covariates enter in exactly the same way into all Cox regression analyses.  
 #' @param data A data in which to fit the models.
-#' @param cause The cause of interest. Defaults to the first cause.
+#' @param cause The cause of interest. Defaults to the first cause (see Details). 
 #' @param survtype Either \code{"hazard"} (the default) or
 #' \code{"survival"}.  If \code{"hazard"} fit cause-specific Cox
 #' regression models for all causes.  If \code{"survival"} fit one
@@ -14,21 +21,26 @@
 #' also a Cox regression model for event-free survival.
 #' @param fitter Routine to fit the Cox regression models.
 #' If \code{coxph} use \code{survival::coxph} else use \code{rms::cph}.
-#' The latter is much faster when it comes to prediction.
+#' @param iid logical. Compute the value of the influence function for each Cox model and store it in the (cause-specific) Cox regression object.
 #' @param ... Arguments given to \code{coxph}.
 #' @return \item{models }{a list with the fitted (cause-specific) Cox
 #' regression objects} \item{response }{the event history response }
 #' \item{eventTimes }{the sorted (unique) event times } \item{survtype }{the
 #' value of \code{survtype}} \item{theCause }{the cause of interest. see
 #' \code{cause}} \item{causes }{the other causes} %% ...
-#' @author Thomas A. Gerds \email{tag@@biostat.ku.dk}
+#' @author Thomas A. Gerds \email{tag@@biostat.ku.dk} and Ulla B. Mogensen
+#' @references
+#' J Benichou and Mitchell H Gail. Estimates of absolute cause-specific risk
+#' in cohort studies. Biometrics, pages 813--826, 1990.
+#'
+#' T.A. Gerds, T.H. Scheike, and P.K. Andersen. Absolute risk regression for
+#' competing risks: interpretation, link functions, and prediction. Statistics
+#' in Medicine, 31(29):3921--3930, 2012.
 #' 
-#' Ulla B. Mogensen \email{ulmo@@biostat.ku.dk}
 #' @seealso \code{\link{coxph}}
 #' @keywords survival
-##' @examples
-##' 
-##' library(riskRegression)
+#' @examples
+#' 
 ##' library(prodlim)
 ##' library(pec)
 ##' library(survival)
@@ -36,13 +48,24 @@
 ##' ## fit two cause-specific Cox models
 ##' ## different formula for the two causes
 ##' fit1 <- CSC(list(Hist(time,status)~sex,Hist(time,status)~invasion+epicel+age),
-##'             data=Melanoma)
+##'             data=Melanoma, iid = TRUE)
 ##' print(fit1)
+##'
+##' 
+##' 
+##' ## model hazard of all cause mortality instead of hazard of type 2 
 ##' fit1a <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
 ##'              data=Melanoma,
 ##'              survtype="surv")
 ##' print(fit1a)
+##'
+##' ## special case where cause 2 has no covariates
+##' fit1b <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~1),
+##'              data=Melanoma)
+##' print(fit1b)
+##' predict(fit1b,cause=1,times=100,newdata=Melanoma)
 ##' 
+##'
 ##' ## same formula for both causes
 ##' fit2 <- CSC(Hist(time,status)~invasion+epicel+age,
 ##'             data=Melanoma)
@@ -69,7 +92,7 @@
 ##'             survtype="surv")
 ##' print(fit5)
 ##'
-##' ## sanity check
+##' ## sanity checks
 ##' 
 ##' cox1 <- coxph(Surv(time,status==1)~invasion+epicel+age+strata(sex),data=Melanoma)
 ##' cox2 <- coxph(Surv(time,status!=0)~invasion+epicel+age+strata(sex),data=Melanoma)
@@ -82,19 +105,24 @@
 ##' ## from the same fit
 ##' library(pec)
 ##' fit2 <- CSC(Hist(time,status)~invasion+epicel+age, data=Melanoma)
-##' pec:::predictEventProb(fit2,cause=1,newdata=Melanoma[c(17,99,108),],times=c(100,1000))
-##' pec:::predictEventProb(fit2,cause=2,newdata=Melanoma[c(17,99,108),],times=c(100,1000))
+##' predict(fit2,cause=1,newdata=Melanoma[c(17,99,108),],times=c(100,1000,10000))
+##' predictRisk(fit2,cause=1,newdata=Melanoma[c(17,99,108),],times=c(100,1000,10000))
+##' predictRisk(fit2,cause=2,newdata=Melanoma[c(17,99,108),],times=c(100,1000,10000))
+##' predict(fit2,cause=1,newdata=Melanoma[c(17,99,108),],times=c(100,1000,10000))
+##' predict(fit2,cause=2,newdata=Melanoma[c(17,99,108),],times=c(100,1000,10000))
 ##' 
 ##' ## survtype = "surv" we need to change the cause of interest 
-##'
+##' library(survival)
 ##' fit5.2 <- CSC(Hist(time,status)~invasion+epicel+age+strata(sex),
 ##'             data=Melanoma,
 ##'             survtype="surv",cause=2)
 ##' ## now this does not work
-##' try(pec:::predictEventProb(fit5.2,cause=1,newdata=Melanoma,times=4))
+##' try(predictRisk(fit5.2,cause=1,newdata=Melanoma,times=4))
 ##' 
 ##' ## but this does
-##' try(pec:::predictEventProb(fit5.2,cause=2,newdata=Melanoma,times=100))
+##' predictRisk(fit5.2,cause=2,newdata=Melanoma,times=100)
+##' predict(fit5.2,cause=2,newdata=Melanoma,times=100)
+##' predict(fit5.2,cause=2,newdata=Melanoma[4,],times=100)
 ##' 
 #' @export
 CSC <- function(formula,
@@ -102,8 +130,10 @@ CSC <- function(formula,
                 cause,
                 survtype="hazard",
                 fitter="coxph",
+                iid=TRUE,
                 ## strip.environment
                 ...){
+    fitter <- match.arg(fitter,c("coxph","cph","phreg"))
     # {{{ type
     survtype <- match.arg(survtype,c("hazard","survival"))
     # }}}
@@ -154,72 +184,94 @@ CSC <- function(formula,
     if (survtype=="hazard"){
         nmodels <- NC
     }else {
-         nmodels <- 2}
+        nmodels <- 2}
     CoxModels <- lapply(1:nmodels,function(x){
-                            if (survtype=="hazard"){
-                                if (x==1)
-                                    causeX <- theCause
-                                else
-                                    causeX <- otherCauses[x-1]}
-                            else{
-                                causeX <- theCause
-                            }
-                            EHF <- prodlim::EventHistory.frame(formula=formula[[x]],
-                                                               data=data,
-                                                               unspecialsDesign=FALSE,
-                                                               specialsFactor=FALSE,
-                                                               specials="strata",
-                                                               stripSpecials="strata",
-                                                               stripArguments=list("strata"=NULL),
-                                                               specialsDesign=FALSE)
-                            formulaX <- formula[[x]]
-                            if (is.null(EHF$strata))
-                                covData <- cbind(EHF$design)
-                            else
-                                covData <- cbind(EHF$design,EHF$strata)
-                            ## response <- stats::model.response(covData)
-                            time <- as.numeric(EHF$event.history[, "time",drop=TRUE])
-                            event <- prodlim::getEvent(EHF$event.history)
-                            if (survtype=="hazard"){
-                                statusX <- as.numeric(event==causeX)
-                            }else{
-                                 if (x==1){
-                                     statusX <- 1*(event==causeX)
-                                 }
-                                 else{ ## event-free status 
-                                     statusX <- response[,"status"]
-                                 }
-                             }
-                            workData <- data.frame(time=time,status=statusX)
-                            ## to interprete formula
-                            ## we need the variables. in case of log(age) terms
-                            ## covData has wrong names 
-                            ## workData <- cbind(workData,covData)
-                            workData <- cbind(workData,data)
-                            formulaXX <- as.formula(paste("survival::Surv(time,status)",
-                                                          as.character(delete.response(terms.formula(formulaX)))[[2]],
-                                                          sep="~"))
-                            if (fitter=="coxph"){
-                                fit <- survival::coxph(formulaXX, data = workData,...)
-                            } else {
-                                  fit <- rms::cph(formulaXX, data = workData,surv=TRUE,...)
-                              }
-                            ## fit$formula <- terms(fit$formula)
-                            ## fit$call$formula <- terms(formulaXX)
-                            ## fit$call$formula <- fit$formula
-                            ## fit$call$data <- NULL
-                            fit$call$formula <- formulaXX
-                            fit$call$data <- workData
-                            fit
-                        })
+        if (survtype=="hazard"){
+            if (x==1)
+                causeX <- theCause
+            else
+                causeX <- otherCauses[x-1]}
+        else{
+            causeX <- theCause
+        }
+        EHF <- prodlim::EventHistory.frame(formula=formula[[x]],
+                                           data=data,
+                                           unspecialsDesign=FALSE,
+                                           specialsFactor=FALSE,
+                                           specials="strata",
+                                           stripSpecials="strata",
+                                           stripArguments=list("strata"=NULL),
+                                           specialsDesign=FALSE)
+        formulaX <- formula[[x]]
+        if (is.null(EHF$strata))
+            covData <- cbind(EHF$design)
+        else
+            covData <- cbind(EHF$design,EHF$strata)
+        ## response <- stats::model.response(covData)
+        time <- as.numeric(EHF$event.history[, "time",drop=TRUE])
+        event <- prodlim::getEvent(EHF$event.history)
+        if (survtype=="hazard"){
+            statusX <- as.numeric(event==causeX)
+        }else{
+            if (x==1){
+                statusX <- 1*(event==causeX)
+            }
+            else{ ## event-free status 
+                statusX <- response[,"status"]
+            }
+        }
+        
+        workData <- data.frame(time=time,status=statusX)
+        if(fitter=="phreg"){
+          if("entry" %in% names(data)){
+            stop("data must not contain a column named \"entry\" when using fitter=\"phreg\"")
+          }
+          workData$entry <- 0
+        }
+        ## to interprete formula
+        ## we need the variables. in case of log(age) terms
+        ## covData has wrong names 
+        ## workData <- cbind(workData,covData)
+        workData <- cbind(workData,data)
+        
+        response <- paste0("survival::Surv(",if(fitter=="phreg"){"entry,"},"time, status)")
+        formulaXX <- as.formula(paste(response,
+                                      as.character(delete.response(terms.formula(formulaX)))[[2]],
+                                      sep="~"))
+        if (fitter=="coxph"){
+            fit <- survival::coxph(formulaXX, data = workData,x=TRUE,y=TRUE,...)
+        } else if(fitter=="cph") {
+            fit <- rms::cph(formulaXX, data = workData,surv=TRUE,x=TRUE,y=TRUE,...)
+        } else if(fitter=="phreg") {
+            fit <- mets::phreg(formulaXX, data = workData, ...)
+        }
+        ## fit$formula <- terms(fit$formula)
+        ## fit$call$formula <- terms(formulaXX)
+        ## fit$call$formula <- fit$formula
+        ## fit$call$data <- NULL
+        fit$call$formula <- formulaXX
+        fit$call$data <- workData
+        fit
+    })
     if (survtype=="hazard"){
         names(CoxModels) <- paste("Cause",c(theCause,otherCauses))
     }else{
-         names(CoxModels) <- c(paste("Cause",theCause),"OverallSurvival")
-     }
+        names(CoxModels) <- c(paste("Cause",theCause),"OverallSurvival")
+    }
+    # }}}
+    # {{{ compute the value of the influence function for each observation
+    if(iid){
+        IF <- lapply(CoxModels,function(x){
+            iidCox(x)
+        })
+        names(IF) <- names(CoxModels)
+    }else{
+        IF <- NULL
+    }
     # }}}
     out <- list(call=call,
                 models=CoxModels,
+                iid=IF,
                 response=response,
                 eventTimes=eventTimes,
                 survtype=survtype,
