@@ -1,5 +1,5 @@
-87ad59170d182111ccc1f7a01ede032f *DESCRIPTION
-90a89adda87b2a4cbdbabd74b87be2da *NAMESPACE
+ea358ccbe30ed5552a3eed8922cf71b0 *DESCRIPTION
+09ac4df19b19a8f8d46ccbcf7531a999 *NAMESPACE
 ec88fb840854454f40263b1d0944e0a0 *R/ARR.R
 34fcd3f4beda0a8d04362fe620e7b6fa *R/CSC.R
 75a6c2f7852a15bc55d5a1c64283b712 *R/FGR.R
@@ -8,7 +8,7 @@ bbcc961b313f7544520862b121c107f0 *R/LRR.R
 bfdfc62d0c1769741aef17820df75ec4 *R/Score.R
 80a6c52bf6c0f7492231d737a6af582b *R/as.data.table.predictCSC.R
 fde14c8c7bd8c5672fd8d3005043a4e4 *R/as.data.table.predictCox.R
-45cf5aa4fdb9eb2a3b245596b3e6618d *R/ate.R
+c4fbc639cab730e66b23054a1deefc0a *R/ate.R
 3f6b5351f6ae1b2d8d1167763a6793f3 *R/boxplot.Score.R
 c9860347f4048b908f9fa260f40ce457 *R/coef.riskRegression.R
 f9fd44dc71d147b96c64e8501d1ce7f7 *R/getCensoringWeights.R
@@ -44,7 +44,7 @@ f08ecc0c8382535659561299424f54ba *R/print.predictCox.R
 3d1d74727f8e9533a938fcb212018d8b *R/qplot.predictCox.R
 2c9627c9f35eefe106635c225e6d99e8 *R/qplotAUC.R
 c5b855d7fdf0ff36d8a8fdfa656a02f3 *R/riskQuantile.R
-9c95e17f6814d8acc02f4afd57f5bedb *R/riskRegression-package.R
+2d35f92aaae895c5b36d1b310e2d66e7 *R/riskRegression-package.R
 6fceae90efa5ab0691657da7755d2431 *R/riskRegression.R
 3171bd917a781f8441bd6f636369b27f *R/sampleData.R
 ac44a88f3420dfe1daa5432eff217ccb *R/simMelanoma.R
@@ -72,7 +72,7 @@ e7a2f166626f3c7c45126911f31690ec *man/FGR.Rd
 bb999b69defcbebb49a9e7f2029f77db *man/SurvResponseVar.Rd
 2e5e8c491210c6c8f5047f8bcd830af7 *man/as.data.table.predictCSC.Rd
 e32187071594cadadad7225e785be9e7 *man/as.data.table.predictCox.Rd
-fe9fcc5bd135436c25667c6a5980a87e *man/ate.Rd
+90941764f3148a4b7776b3c59ebca742 *man/ate.Rd
 abd2f48b620229f9a11d433fdb4a9c8c *man/boxplot.Score.Rd
 46d9d27f16930c29a56aca6c7f827b9d *man/coef.riskRegression.Rd
 d36c91f53dcae7bca2cdbd2549d4b2db *man/colCenter_cpp.Rd
@@ -81,6 +81,7 @@ d36c91f53dcae7bca2cdbd2549d4b2db *man/colCenter_cpp.Rd
 239e46bea0efd199d7f661530b20fa27 *man/colScale_cpp.Rd
 51ea74862f23e3b19fb5b326cf0bc7fa *man/colSumsCrossprod.Rd
 f4455a88044d0fefac087f37b44731bb *man/extractStrata.Rd
+88fc664230ccdcf2a2cf86130756b3f4 *man/findP1.Rd
 ec01ec130ddd6059f8c687e92ff1530c *man/iid.Rd
 ff77a14f7dc94b49203633eaa2fde9e0 *man/ipcw.Rd
 ff18fd5fccbc785c671f9c078b78c29d *man/model.matrix.phreg.Rd
@@ -134,7 +135,7 @@ d2456adfa4e9bbed644a9a3b0f48f61f *src/colSumsCrossprod.cpp
 8b0e42205ea285369fc6d48c2b9f7086 *src/itfit.c
 4d364354c9672392f9a06f61772eb941 *src/itfitsemi.c
 3cbceff1e8ade92a0bd2f21c9b7c3fab *src/matrix.c
-ec2bc0bf30d8b4634d33b433aa7343ef *src/predictCIF.cpp
+af257e66f17230e8aab50409ba862987 *src/predictCIF.cpp
 d73d48630bed4978bcd6d8caba5c15a6 *src/riskregression.h
 2929eda70f55c3ef7a836cf508102e09 *src/rowCumSum.cpp
 9b4991b7ed3c4ca30b3c819384c116be *src/rowSumsCrossprod.cpp
