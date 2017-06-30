@@ -6,6 +6,7 @@ library(lava)
 library(riskRegression)
 library(ModelGood)
 library(data.table)
+library(testthat)
 library(rms)
 N <- 300
 M <- 200
@@ -15,12 +16,19 @@ test.d <- sampleData(M,outcome="binary")
 f1 <- glm(Y~X1+X2+X6+X8,data=train.d,family=binomial)
 f2 <- lrm(Y~X1+X2+X9,data=train.d)
 f3 <- lrm(Y~X6,data=train.d)
-Score(list(f1,f2,f3),data=test.d,formula=Y~1,metrics=c("Brier","auc"),test=FALSE)
+a <- Score(list(f1,f2,f3),data=test.d,formula=Y~1,metrics=c("Brier","auc"),conf.int=FALSE,nullModel=FALSE)
 library(ModelGood)
 ## v <- Brier(list(f1,f2,f3),data=test.d,splitMethod="none",verbose=FALSE)
 v <- Roc(list(f1,f2,f3),data=test.d,splitMethod="none",verbose=FALSE)
-cbind(Auc=unlist(v$Auc),Brier=unlist(v$Brier))
-u
+x <- cbind(Auc=unlist(v$Auc),Brier=unlist(v$Brier))
+y <- cbind(Auc=a$AUC$score[,AUC],Brier=a$Brier$score[,Brier])
+rownames(y) <- rownames(x)
+expect_equal(x,y)
+expect_equal(predictRisk(f1,newdata=test.d),
+             as.numeric(predictStatusProb(f1,newdata=test.d)))
+daimres <- Daim::deLong.test(data.frame(R1=predictRisk(f1,newdata=test.d),
+                                        R2=predictRisk(f2,newdata=test.d),R3=predictRisk(f3,newdata=test.d)), labels=test.d$Y, labpos="1")
+z <- daimres$AUC[,1]
 #+END_SRC
 
 ** ROC plot
@@ -54,9 +62,10 @@ library(data.table)
 library(prodlim)
 library(ModelGood)
 library(timeROC)
+library(riskRegression)
+library(testthat)
 library(pec)
 library(rms)
-library(riskRegression)
 set.seed(19)
 N <- 300
 M <- 2000
@@ -73,6 +82,7 @@ print(rbind(c(Package="timeROC",timeROC.AUC=tROC$AUC[[2]],
               timeROC.seAUC=tROC$inference$vect_sd_1[[2]]),
             c(Package="riskRegression",Rscore$AUC$score[,c("AUC"=AUC,"se.AUC"=se.AUC)])))
 cbind(timeROC.time=tROCtime[[1]],Rscore.time=Rscoretime[[1]])
+expect_equal(tROC$AUC[[2]],Rscore$AUC$score[,AUC])
 #+END_SRC   
 
 *** Without ties
@@ -295,7 +305,7 @@ c2 <- coxph(Surv(time,event)~X1+X2+X9,data=trainS,x=TRUE)
 c3 <- coxph(Surv(time,event)~X6,data=trainS,x=TRUE)
 ## plot(prodlim(Hist(time,event)~1,data=testS))
 ascore <- Score(list(c1,c2,c3),data=testS,formula=Surv(time,event)~1,times=3:18,metrics=c("AUC"),nullModel=FALSE,dolist=NULL,summary=NULL,plots=NULL)
-plot.score.AUC(ascore)
+plotAUC(ascore)
 #+END_SRC   
 
 * Competing risks
@@ -318,23 +328,23 @@ Score(list(ex$X2),data=ex,formula=Hist(time,status)~1,times=4.1,metrics="aUc",nu
 library(prodlim)
 library(data.table)
 library(rms)
+library(riskRegression)
 library(pec)
 library(survival)
-Source(riskRegression,silent=TRUE)
 source("~/research/tmp/Data-and-R-code/Rcode/Rfunctions/BS.R")
 source("~/research/tmp/Data-and-R-code/Rcode/Rfunctions/ComputeiidKM.R")
+source("~/research/SoftWare/pec/R/ipcw.R")
 set.seed(27)
 train <- SimCompRisk(100)
 d <- SimCompRisk(4)
 d <- d[,-c(1:3,8)]
 d$time <- round(d$time)
 d$X2 <- round(d$X2)
-library(riskRegression)
 f <- CSC(Hist(time,event)~X1+X2,data=train)
 p <- predictEventProb(f,newdata=d,times=5,cause=1)
 system.time(a <- BS(timepoints=5,d$time,d$event,p,cause=1,compute.iid=TRUE))
 system.time(b <- Score(list(p),formula=Hist(time,event)~1,times=5,data=d,metrics="Brier",nullModel=FALSE))
-print(rbind(cbind(TROC.BS=a$BS,TROC.se=a$sd),b$Brier$score[,c(Brier,se.Brier)]))
+print(cbind(TROC=c(BS=a$BS,se=a$sd),Score=b$Brier$score[,c(Brier,se.Brier)]))
 #+END_SRC
 
 ** Retrospective risk assessment: risk difference conditional on outcome

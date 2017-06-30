@@ -5,8 +5,9 @@
 \title{Compute the average treatment effect using CSC.}
 \usage{
 ate(object, data, treatment, contrasts = NULL, times, cause,
-  conf.level = 0.95, B = 0, seed, handler = c("mclapply", "foreach"),
-  mc.cores = 1, verbose = TRUE, ...)
+  conf.level = 0.95, se = TRUE, band = FALSE, B = 0, nSim.band = 1000,
+  seed, handler = c("mclapply", "foreach"), mc.cores = 1, verbose = TRUE,
+  logTransform = FALSE, store.iid = "full", ...)
 }
 \arguments{
 \item{object}{outcome model which describes how event risk depends on treatment and covariates.
@@ -22,11 +23,18 @@ The object carry its own call and have a \code{predictRisk} method. See examples
 
 \item{cause}{the cause of interest}
 
-\item{conf.level}{Numeric. Confidence level of the confidence intervals. Disregarded if negative.}
+\item{conf.level}{Numeric. Confidence level of the confidence intervals.}
+
+\item{se}{Logical. If \code{TRUE} add the standard errors and confidence intervals
+to the output.}
+
+\item{band}{Logical. If \code{TRUE} add the confidence bands to the output.}
 
 \item{B}{the number of bootstrap replications used to compute the
 confidence intervals. If it equals 0, then Wald-type confidence intervals are computed.
 They rely on the standard error estimated using the influence function of the estimator.}
+
+\item{nSim.band}{the number of simulations used to compute the quantiles for the confidence bands.}
 
 \item{seed}{An integer used to generate seeds for bootstrap and to
 achieve reproducibility of the bootstrap confidence intervals.}
@@ -42,6 +50,11 @@ set.}
 
 \item{verbose}{Logical. If \code{TRUE} inform about estimated run
 time.}
+
+\item{logTransform}{Should the confidence interval for the ratio be computed using a log-tranformation. Only active if Wald-type confidence intervals are computed.}
+
+\item{store.iid}{Implementation used to estimate the standard error. Can be \code{"full"} or \code{"minimal"}.
+\code{"minimal"} requires less memory but can only estimate the standard for the difference between treatment effects (and not for the ratio).}
 
 \item{...}{passed to predictRisk}
 }
@@ -60,7 +73,7 @@ library(survival)
 library(rms)
 
 set.seed(10)
-n <- 1e2
+n <- 100
 
 ## Cox model
 dtS <- sampleData(n,outcome="survival")
@@ -68,20 +81,25 @@ dtS$time <- round(dtS$time,1)
 dtS$X1 <- factor(rbinom(n, prob = c(0.3,0.4) , size = 2), labels = paste0("T",0:2))
 
 fit=cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
-## the cph object carries its call:
-fit$call
-## and there is a predictRisk method
-"predictRisk.cph" \%in\% methods("predictRisk")
 
-ateFit=ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-        times = 5:7, B = 3, y = TRUE, mc.cores=1)
+\dontrun{
+ateFit1 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
+        times = 5:8, B = 1e3, y = TRUE,  mc.cores=1)
 
-ateFit=ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-        times = 5:7, B = 0, y = TRUE, mc.cores=1)
+ateFit1 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
+        times = 5:8, B = 1e1, y = TRUE,  mc.cores=1)
+ateFit2 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
+        times = 5:8, B = 0, y = TRUE, band = TRUE, mc.cores=1)
 
-## Cause specific cox model
+ateFit3 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
+           times = 5:8, B = 0, y = TRUE, band = TRUE, mc.cores=1,
+           store.iid = "minimal")
+}
+
+## Competing risks: Cause specific Cox regression
+\dontrun{
 set.seed(17)
-n=200
+n=100
 dt <- sampleData(n,outcome="competing.risks")
 dt$time <- round(dt$time,1)
 dt$X1 <- factor(rbinom(n, prob = c(0.2,0.3,0.2) , size = 3), labels = paste0("T",0:3))
@@ -90,12 +108,14 @@ ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
         times = 7, cause = 1, B = 2, mc.cores=1)
 
 atefit=ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-        times = 1:7, cause = 1, B = 0, mc.cores=1,conf.level=FALSE)
+        times = 1:7, cause = 1, mc.cores=1, se = FALSE, band = FALSE)
 
-\dontrun{
+
  ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-        times = 5:7, cause = 1, B = 0, mc.cores=1)
+        times = 5:7, cause = 1, B = 0, se = TRUE, band = TRUE, mc.cores=1)
 }
 
 }
-
+\author{
+Brice Ozenne \email{broz@sund.ku.dk} and Thomas Alexander Gerds \email{tag@biostat.ku.dk}
+}

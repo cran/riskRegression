@@ -5,9 +5,10 @@
 \title{Fast computation of survival probabilities, hazards and cumulative hazards from Cox regression models}
 \usage{
 predictCox(object, newdata = NULL, times, centered = TRUE,
-  type = c("hazard", "cumhazard", "survival"), keep.strata = TRUE,
-  keep.times = TRUE, keep.newdata = FALSE, se = FALSE, iid = FALSE,
-  conf.level = 0.95)
+  type = c("cumhazard", "survival"), keep.strata = TRUE,
+  keep.times = TRUE, keep.newdata = FALSE, se = FALSE, band = FALSE,
+  iid = FALSE, average.iid = FALSE, nSim.band = 10000,
+  conf.level = 0.95, logTransform = TRUE, store.iid = "full")
 }
 \arguments{
 \item{object}{The fitted Cox regression model object either
@@ -49,20 +50,33 @@ to the output.}
 \item{keep.newdata}{Logical. If \code{TRUE} add the value of the
 covariates used to make the prediction in the output list.}
 
-\item{se}{Logical. If \code{TRUE} add the standard error
-corresponding to the output.}
+\item{se}{Logical. If \code{TRUE} add the standard error to the output.}
 
-\item{iid}{Logical. If \code{TRUE} add the influence function
-corresponding to the output.}
+\item{band}{Logical. If \code{TRUE} add the confidence band to the output.}
+
+\item{iid}{Logical. If \code{TRUE} add the influence function to the output.}
+
+\item{average.iid}{Logical. If \code{TRUE} add the average of the influence function over \code{newdata} to the output.}
+
+\item{nSim.band}{the number of simulations used to compute the quantiles
+for the confidence bands..}
 
 \item{conf.level}{Level of confidence.}
+
+\item{logTransform}{Should the confidence intervals/bands be computed on the log (hazard) and
+log(-log) (survival) scale and be backtransformed.
+Otherwise they are computed on the original scale and truncated (if necessary).}
+
+\item{store.iid}{Implementation used to estimate the influence function and the standard error.
+Can be \code{"full"} or \code{"minimal"}. See the details section of \code{\link{calcSeCox}}.}
+
+\item{...}{arguments to be passed to the function \code{iidCox}.}
 }
 \value{
 A list with some or all of the following elements:
 \itemize{
 \item{times}: the time points at which the other elements are evaluated.
 \item{hazard}: When argument \code{newdata} is not used the baseline hazard function, otherwise the predicted hazard function. 
-\item{hazard.se}: The standard errors of the predicted hazard function.
 \item{cumhazard}: When argument \code{newdata} is not used the cumulative baseline hazard function, otherwise the predicted cumulative hazard function. 
 \item{cumhazard.se}: The standard errors of the predicted cumulative hazard function.
 \item{survival}: When argument \code{newdata} is not used the survival probabilities corresponding to the baseline hazard, otherwise the predicted survival probabilities.
@@ -79,6 +93,9 @@ Not working with time varying predictor variables or
     delayed entry.  The centered argument enables us to reproduce
     the results obtained with the \code{basehaz} function from the
     survival package.
+    
+When setting \code{logTransform} to \code{TRUE}, the standard error that is returned is 
+before back-transformation to the original scale.
 }
 \examples{
 library(survival)
@@ -95,6 +112,8 @@ predictCox(fit)
 predictCox(fit,centered=FALSE,type="hazard")
 predictCox(fit,centered=TRUE,type="hazard")
 predictCox(fit, newdata=nd, times=c(3,8),se=TRUE)
+predictCox(fit, newdata=nd, times=c(3,8),se=TRUE, logTransform = TRUE)
+predictCox(fit, newdata=nd, times=c(3,8),se=TRUE, store.iid = "minimal")
 predictCox(fit, newdata=nd, times = 5,iid=TRUE)
 
 cbind(survival::basehaz(fit),predictCox(fit,type="cumhazard")$cumhazard)
@@ -124,4 +143,3 @@ predictCox(fitS, newdata=nd, times = 3)
 \author{
 Brice Ozenne broz@sund.ku.dk, Thomas A. Gerds tag@biostat.ku.dk
 }
-

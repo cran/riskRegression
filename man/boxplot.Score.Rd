@@ -4,8 +4,9 @@
 \alias{boxplot.Score}
 \title{Boxplot risk quantiles}
 \usage{
-\method{boxplot}{Score}(x, model, reference, type, timepoint, lwd = 3, xlim,
-  xlab, main, outcomeLabel, eventLabels, refline = TRUE, ...)
+\method{boxplot}{Score}(x, model, reference, type, timepoint, overall = 1L,
+  lwd = 3, xlim, xlab = "", main, outcomeLabel, outcomeLabel.offset = 0,
+  eventLabels, refline = (type == "diff"), add = FALSE, ...)
 }
 \arguments{
 \item{x}{Score object obtained by calling function \code{Score}.}
@@ -20,6 +21,8 @@ calculation of risk differences.}
 
 \item{timepoint}{time point specifying the prediction horizon}
 
+\item{overall}{Logical. Tag to be documented.}
+
 \item{lwd}{line width}
 
 \item{xlim}{x-axis limits}
@@ -31,10 +34,14 @@ calculation of risk differences.}
 \item{outcomeLabel}{Title label for column which shows the outcome
 status}
 
+\item{outcomeLabel.offset}{Vertical offset for outcomeLabel}
+
 \item{eventLabels}{Labels for the different events (causes).}
 
 \item{refline}{Logical, for \code{type="diff"} only. If \code{TRUE}
 draw a red vertical line at \code{0}.}
+
+\item{add}{Logical. Tag to be documented.}
 
 \item{...}{not used}
 }
@@ -56,6 +63,7 @@ library(survival)
 ds=sampleData(40,outcome="survival")
 fitconv=coxph(Surv(time,event)~X6,data=ds,x=TRUE,y=TRUE)
 fitnew=coxph(Surv(time,event)~X6+X9,data=ds,x=TRUE,y=TRUE)
+\dontrun{ # [ERROR: Error in gzfile(file, "wb") : cannot open the connection]
 scoreobj=Score(list("conventional model"=fitconv,"new model"=fitnew),
                 formula=Hist(time,event)~1, data=ds,
                 summary="riskQuantile",metrics=NULL, plots=NULL,
@@ -68,17 +76,17 @@ scoreobj1=Score(list("conventional model"=fitconv,"new model"=fitnew),
                 summary="riskQuantile",metrics=NULL, plots=NULL,
                 times=5,nullModel=FALSE,compare=list(c(2,1)))
 boxplot(scoreobj1)
+}
 
 # competing risks outcome
-\dontrun{
-data(Melanoma)
+library(survival)
+data(Melanoma, package = "riskRegression")
 fitconv = CSC(Hist(time,status)~invasion+age+sex,data=Melanoma)
 fitnew = CSC(Hist(time,status)~invasion+age+sex+logthick,data=Melanoma)
 scoreobj=Score(list("Conventional model"=fitconv,"New model"=fitnew),
                formula=Hist(time,status)~1,
                data=Melanoma,metrics=NULL,summary="riskQuantile",times=5*365.25,nullModel=FALSE)
 boxplot(scoreobj)
-}
 
 # more than 2 competing risks
 m=lava::lvm(~X1+X2+X3)
@@ -100,4 +108,3 @@ boxplot(scoreobj)
 
 
 }
-

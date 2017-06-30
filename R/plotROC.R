@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun 23 2016 (10:27) 
 ## Version: 
-## last-updated: Mar  6 2017 (14:40) 
+## last-updated: Jun 10 2017 (17:45) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 56
+##     Update #: 60
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -75,6 +75,8 @@ plotROC <- function(x,
                     legend=TRUE,
                     add=FALSE,
                     ...){
+    if (is.null(x$ROC))
+        stop("Object has no information for ROC curves.\nYou should call the function \"riskRegression::Score\" with plots=\"ROC\".")
     model=FPR=TPR=times=NULL
     cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     pframe <- x$ROC$plotframe
@@ -126,7 +128,7 @@ plotROC <- function(x,
                                                     round(100*auc$AUC,digits=1),
                                                     round(100*auc$lower.AUC,digits=1),
                                                     round(100*auc$upper.AUC,digits=1)))
-    }
+    }else auc.legend <- FALSE
     legend.DefaultArgs <- list(legend=auc.legend,lwd=lwd,col=col,lty=lty,cex=cex,bty="n",y.intersp=1.3,x="bottomright",title="AUC")
     plot.DefaultArgs <- list(x=0,y=0,type = "n",ylim = c(0,1),xlim = c(0,1),ylab=ylab,xlab=xlab)
     axis1.DefaultArgs <- list(side=1,las=1,at=seq(0,1,.25))

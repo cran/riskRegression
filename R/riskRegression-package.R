@@ -20,7 +20,7 @@
 #' \item{status}{a numeric with values \code{0=censored} \code{1=death.malignant.melanoma} \code{2=death.other.causes}}
 #' \item{event}{a factor with levels \code{censored} \code{death.malignant.melanoma} \code{death.other.causes}}
 #' \item{invasion}{a factor with levels \code{level.0}, \code{level.1}, \code{level.2}}
-#' \item{ici}{inflammatory cell infiltration (ICI): 0, 1, 2 or 3}
+#' \item{ici}{inflammatory cell infiltration (IFI): 0, 1, 2 or 3}
 #' \item{epicel}{a factor with levels \code{not present} \code{present}}
 #' \item{ulcer}{a factor with levels \code{not present} \code{present}}
 #' \item{thick}{tumour thickness (in 1/100 mm)}
@@ -43,9 +43,10 @@
 #' @docType package
 #' @name riskRegression
 #' @useDynLib riskRegression, .registration=TRUE
+#' @importFrom abind abind
 #' @importFrom Rcpp sourceCpp evalCpp
 #' @importFrom rms strat cph
-#' @importFrom ggplot2 aes aes_string element_blank element_line element_rect geom_errorbar geom_line geom_point geom_ribbon ggplot scale_colour_manual scale_fill_manual scale_y_continuous theme theme_bw "%+replace%" xlab
+#' @importFrom ggplot2 autoplot aes aes_string element_blank element_line element_rect geom_errorbar geom_line geom_point geom_ribbon ggplot labs guide_legend guides scale_colour_manual scale_color_continuous scale_fill_manual scale_linetype_manual scale_y_continuous theme theme_bw "%+replace%"  unit xlab  ylab
 #' @importFrom survival Surv strata coxph
 #' @importFrom lava transform<-
 #' @importFrom data.table as.data.table copy data.table is.data.table melt rbindlist setnames setorder setcolorder setkey ":=" ".N" ".SD"
