@@ -9,8 +9,8 @@ Fits a regression model for the risk of an event -- allowing for competing
 risks.}
 \usage{
 riskRegression(formula, data, times, link = "relative", cause,
-  confint = TRUE, cens.model, cens.formula, numSimu = 0, maxiter = 50,
-  silent = 1, convLevel = 6, conservative = TRUE, ...)
+  conf.int = TRUE, cens.model, cens.formula, max.iter = 50,
+  conservative = TRUE, ...)
 }
 \arguments{
 \item{formula}{Formula where the left hand side specifies the event
@@ -29,7 +29,7 @@ model.  \code{"logistic"} for the logistic risk regression model.
 
 \item{cause}{The cause of interest.}
 
-\item{confint}{If \code{TRUE} return the iid decomposition, that
+\item{conf.int}{If \code{TRUE} return the iid decomposition, that
 can be used to construct confidence bands for predictions.}
 
 \item{cens.model}{Specified the model for the (conditional)
@@ -41,24 +41,18 @@ it may be "Cox" (Cox regression).}
 the censoring model.  If not specified the right hand side of
 \code{formula} is used.}
 
-\item{numSimu}{Number of simulations in resampling.}
-
-\item{maxiter}{Maximal number of iterations.}
-
-\item{silent}{Set this to \code{0} to see some system messages
-during fitting.}
-
-\item{convLevel}{Integer between 1 and 10, specifying the
-convergence criterion for the fitting algorithm as
-\code{10^{-convLevel}}.}
+\item{max.iter}{Maximal number of iterations.}
 
 \item{conservative}{If \code{TRUE} use variance formula that ignores the contribution
 by the estimate of the inverse of the probability of censoring weights}
 
-\item{...}{Not used.}
+\item{...}{Further arguments passed to \code{comp.risk}}
 }
 \description{
-This is the twin-sister of the function \code{comp.risk} from the timereg package.
+This is a wrapper for the function \code{comp.risk} from the timereg package.
+The main difference is one marks variables in the formula that should have a
+time-dependent effect whereas in \code{comp.risk} one marks variables that
+should have a time constant (proportional) effect.
 }
 \examples{
 
@@ -80,7 +74,7 @@ plot(fit.arr,col=3:4,newdata=data.frame(sex=c("Female","Male")))
 ## compare with non-parametric Aalen-Johansen estimate
 library(prodlim)
 fit.aj <- prodlim(Hist(time,status)~sex,data=Melanoma)
-plot(fit.aj,confint=FALSE)
+plot(fit.aj,conf.int=FALSE)
 plot(fit.arr,add=TRUE,col=3:4,newdata=data.frame(sex=c("Female","Male")))
 
 ## with time-dependent effect
@@ -106,7 +100,7 @@ plot(fit2.arr,col=1:5,newdata=data.frame(logthick=quantile(Melanoma$logthick)))
 ## comparison with nearest neighbor non-parametric Aalen-Johansen estimate
 library(prodlim)
 fit2.aj <- prodlim(Hist(time,status)~logthick,data=Melanoma)
-plot(fit2.aj,confint=FALSE,newdata=data.frame(logthick=quantile(Melanoma$logthick)))
+plot(fit2.aj,conf.int=FALSE,newdata=data.frame(logthick=quantile(Melanoma$logthick)))
 plot(fit2.arr,add=TRUE,col=1:5,lty=3,newdata=data.frame(logthick=quantile(Melanoma$logthick)))
 
 ## logistic risk regression
@@ -156,14 +150,14 @@ summary(fit.lrr)
 ## nearest neighbor non-parametric Aalen-Johansen estimate
 library(prodlim)
 fit.aj <- prodlim(Hist(time,status)~thick,data=Melanoma)
-plot(fit.aj,confint=FALSE)
+plot(fit.aj,conf.int=FALSE)
 
 # prediction performance
 x <- Score(list(fit.arr2a,fit.arr2b,fit.lrr),
              data=Melanoma,
              formula=Hist(time,status)~1,
              cause=1,
-             splitMethod="none")
+             split.method="none")
 
 
 }
@@ -183,7 +177,6 @@ Martinussen and Scheike (2006), Dynamic regression models for survival data,
 Springer.
 }
 \author{
-Thomas H. Scheike \email{ts@biostat.ku.dk}
-Thomas A. Gerds \email{tag@biostat.ku.dk}
+Thomas A. Gerds \email{tag@biostat.ku.dk}, Thomas H. Scheike \email{ts@biostat.ku.dk}
 }
 \keyword{survival}

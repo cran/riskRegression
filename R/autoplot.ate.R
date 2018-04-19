@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: apr 28 2017 (14:19) 
 ## Version: 
-## last-updated: Jun 29 2017 (16:55) 
-##           By: Thomas Alexander Gerds
-##     Update #: 27
+## last-updated: feb 15 2018 (16:29) 
+##           By: Brice Ozenne
+##     Update #: 32
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -36,12 +36,13 @@
 #' ## Cox model
 #' dtS <- sampleData(n,outcome="survival")
 #'
-#' fit=cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
+#' fit <- cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
 #'
 #' seqTimes <- sort(unique(fit$y[,1]))
-#' seqTimes5 <-seqTimes[seqTimes>5 & seqTimes<10]
+#' seqTimes5 <- seqTimes[seqTimes>5 & seqTimes<10]
 #' ateFit <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-#'               times = seqTimes, B = 0, band = TRUE, nSim.band = 500, y = TRUE, mc.cores=1)
+#'               times = seqTimes, B = 0, band = TRUE, nsim.band = 500, y = TRUE,
+#'               mc.cores=1)
 #' autoplot(ateFit, band = TRUE, ci = TRUE)
 #' 
 #' @method autoplot ate
@@ -63,7 +64,7 @@ autoplot.ate <- function(object,
     }
     if(band && object$band==FALSE){
         stop("argument \'band\' cannot be TRUE when the quantiles for the confidence bands have not been computed \n",
-             "set argment \'nSim.band\' to a positive integer when calling ate \n")
+             "set argment \'nsim.band\' to a positive integer when calling ate \n")
     }
   
     ## display
@@ -74,7 +75,7 @@ autoplot.ate <- function(object,
     gg.res <- predict2plot(dataL = dataL,
                            name.outcome = "meanRisk", # must not contain space to avoid error in ggplot2
                            ci = ci, band = band,
-                           groupBy = "Treatment",
+                           group.by = "Treatment",
                            conf.level = object$conf.level,
                            alpha = alpha,
                            origin = min(object$time))

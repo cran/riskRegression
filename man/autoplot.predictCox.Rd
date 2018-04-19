@@ -5,30 +5,22 @@
 \title{Plot predictions from a Cox model}
 \usage{
 \method{autoplot}{predictCox}(object, type = NULL, ci = FALSE,
-  band = FALSE, groupBy = "row", reduce.data = FALSE, plot = TRUE,
+  band = FALSE, group.by = "row", reduce.data = FALSE, plot = TRUE,
   digits = 2, alpha = NA, ...)
 }
 \arguments{
 \item{object}{object obtained with the function \code{predictCox}.}
 
-\item{type}{the type of predicted value. Choices are \itemize{
-\item \code{"hazard"} the baseline hazard function when
-argument \code{newdata} is not used and the hazard function
-when argument \code{newdata} is used.  \item \code{"cumhazard"}
-the cumulative baseline hazard function when argument
-\code{newdata} is not used and the cumulative hazard function
-when argument \code{newdata} is used.  \item \code{"survival"}
-the survival baseline hazard function when argument
-\code{newdata} is not used and the cumulative hazard function
-when argument \code{newdata} is used.  } Several choices can be
-combined in a vector of strings that match (no matter the case)
-strings \code{"hazard"},\code{"cumhazard"}, \code{"survival"}.}
+\item{type}{the type of predicted value to display. Choices are 
+\code{"hazard"} the hazard function,
+\code{"cumhazard"} the cumulative hazard function, 
+or \code{"survival"} the survival function.}
 
 \item{ci}{Logical. If \code{TRUE} display the confidence intervals for the predictions.}
 
 \item{band}{Logical. If \code{TRUE} display the confidence bands for the predictions.}
 
-\item{groupBy}{The grouping factor used to color the prediction curves. Can be \code{"row"}, \code{"strata"}, or \code{"covariates"}.}
+\item{group.by}{The grouping factor used to color the prediction curves. Can be \code{"row"}, \code{"strata"}, or \code{"covariates"}.}
 
 \item{reduce.data}{Logical. If \code{TRUE} only the covariates that does take indentical values for all observations are displayed.}
 
@@ -57,8 +49,8 @@ ggplot(as.data.table(dt.basehaz), aes(x = time, y = survival)) + geom_point() + 
 pred.cox <- predictCox(m.cox, newdata = d[1:4,],
   times = 1:5, type = "survival", keep.newdata = TRUE)
 autoplot(pred.cox)
-autoplot(pred.cox, groupBy = "covariates")
-autoplot(pred.cox, groupBy = "covariates", reduce.data = TRUE)
+autoplot(pred.cox, group.by = "covariates")
+autoplot(pred.cox, group.by = "covariates", reduce.data = TRUE)
 
 
 m.cox.strata <- coxph(Surv(time,event)~ strata(X1) + strata(X2) + X3 + X6,
@@ -66,9 +58,9 @@ data = d, x = TRUE, y = TRUE)
 pred.cox.strata <- predictCox(m.cox.strata, newdata = d[1,,drop=FALSE],
 time = 1:5, keep.newdata = TRUE)
 autoplot(pred.cox.strata, type = "survival")
-autoplot(pred.cox.strata, type = "survival", groupBy = "strata")
+autoplot(pred.cox.strata, type = "survival", group.by = "strata")
 res <- autoplot(pred.cox.strata, type = "survival",
-            groupBy = "covariates")
+            group.by = "covariates")
 
 # customize display
 res$plot + geom_point(data = res$data, size = 5)
@@ -80,7 +72,7 @@ autoplot(pred.cox, ci = TRUE)
 
 ## predictions with confidence bands
 pred.cox <- predictCox(m.cox, newdata = d[1,,drop=FALSE],
-  times = 1:5, type = "survival", nSim.band = 500,  band = TRUE, keep.newdata = TRUE)
+  times = 1:5, type = "survival", nsim.band = 500,  band = TRUE, keep.newdata = TRUE)
 autoplot(pred.cox, band = TRUE)
 
 

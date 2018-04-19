@@ -114,16 +114,72 @@ getInfluenceCurve.AUC.competing.risks <- function(t,n,time,risk,Cases,Controls1,
     (Term.jkli + Term.iklj + Term.ijkl + Term.ijlk)/(n*n)
 }
 
-getInfluenceCurve.Brier <- function(t,time,Yt,ipcwResiduals,MC){
-    hit1=(Yt==0)*ipcwResiduals
-    hit2=(Yt==1)*ipcwResiduals
-    Brier <- mean(ipcwResiduals)
+getInfluenceCurve.Brier1 <- function(t,time,Yt,residuals,MC){
+    hit1=(Yt==0)*residuals
+    hit2=(Yt==1)*residuals
+    Brier <- mean(residuals)
     ## FIXME: make sure that sindex cannot be 0
     ## browser(skipCalls=1)
+    if (length(dim(MC))==3) browser()
     Int0tdMCsurEffARisk <- MC[prodlim::sindex(jump.times=unique(time),eval.times=t),,drop=FALSE]
     IF.Brier=hit1+hit2-Brier + mean(hit1)*Int0tdMCsurEffARisk + colMeans(MC*hit2)
 }
 
+getInfluenceCurve.Brier <- function(t,
+                                    time,
+                                    IC0,
+                                    residuals,
+                                    WTi,
+                                    Wt,
+                                    IC.G,
+                                    cens.model,
+                                    nth.times=NULL){
+    ##
+    ## Compute influence function of Brier score estimator using weights of the reverse Cox model 
+    ## This function evaluates the part of influence function which is related to the IPCW weights
+    ## The other part is IC0.
+    ## 
+    ## \frac{1}{n}\sum_{i=1}^n 
+    ## m_{t,n}^{(1)}(X_i) 
+    ## [\frac{I_{T_i\leq t}\Delta_i}{G^2(T_i\vert Z_i)}IF_G(T_i,X_k; X_i)+\frac{I_{T_i>t}}{G^2(t|Z_i)}IF_G(t,X_k; X_i)] 
+    ## with 
+    ## IF_G(t,X_k; X_i)=-\exp(-\Lambda(t\vert Z_i))IF_{\Lambda}(t,X_k; X_i) 
+    ##
+    ## IC_G(t,z;x_k) is an array with dimension (nlearn=N, gtimes, newdata)
+    ## where gtimes = subject.times (Weights$IC$IC.subject) or times (Weights$IC$IC.times)
+    ## and subject.times=Y[(((Y<=max(times))*status)==1)]
+    ##
+    ## don't square the weights because they will be multiplied with the
+    ## residuals that are already weighted 
+    ## 
+    N <- length(residuals)
+    if (cens.model=="cox") {## Cox regression
+        ic.weights <- matrix(0,N,N)
+        k=0 ## counts subject-times with event before t
+        for (i in 1:N){
+            if (residuals[i]>0){
+                if (time[i]<=t){ ## min(T,C)<=t, note that (residuals==0) => (status==0)  
+                    k=k+1
+                    ic.weights[i,] <- IC.G$IC.subject[i,k,]/(WTi[i])
+                }else{## min(T,C)>t
+                    ic.weights[i,] <- IC.G$IC.times[i,nth.times,]/(Wt[i])
+                }
+            }
+        }
+        IF.Brier <- ic.weights*residuals
+        IF.Brier <- IC0-colMeans(IF.Brier)
+        IF.Brier
+    }else{
+        ## Blanche et al. 2015 (joint models) web appendix equation (14)
+        Yt <- 1*(time<=t)
+        hit1=(time>t)*residuals ## equation (7)
+        hit2=(time<=t)*residuals ## equation (8) 
+        Brier <- mean(residuals)
+        Int0tdMCsurEffARisk <- rbind(0,IC.G)[1+prodlim::sindex(jump.times=unique(time),eval.times=t),,drop=FALSE]
+        IF.Brier=hit1+hit2-Brier + mean(hit1)*Int0tdMCsurEffARisk + colMeans(IC.G*hit2)
+        IF.Brier
+    }
+}
 
 getInfluenceCurve.KM <- function(time,status){
     ## compute influence function for reverse Kaplan-Meier
@@ -133,8 +189,9 @@ getInfluenceCurve.KM <- function(time,status){
     times <- unique(time)
     NU <- length(times)
     lagtime <- c(0,times[-NU])
-    F <- prodlim::prodlim(Hist(time,status)~1,data=data.frame(time=time,status=status),reverse=FALSE)
-    G <- prodlim::prodlim(Hist(time,status)~1,data=data.frame(time=time,status=status),reverse=TRUE)
+    dd <- data.frame(time=time,status=status)
+    F <- prodlim::prodlim(Hist(time,status)~1,data=dd,reverse=FALSE)
+    G <- prodlim::prodlim(Hist(time,status)~1,data=dd,reverse=TRUE)
     Stilde.T <- prodlim::predictSurvIndividual(F,lag=1)*prodlim::predictSurvIndividual(G,lag=1)
     Stilde.s <- predict(F,times=lagtime)*predict(G,times=lagtime)
     out <- lapply(1:N,function(i){((1-status[i])*(time[i]<=times))/Stilde.T[i] - cumsum((time[i]>=times)*(G$hazard*G$n.lost)/Stilde.s)})

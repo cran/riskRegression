@@ -4,12 +4,12 @@
 \alias{plotCalibration}
 \title{Plot Calibration curve}
 \usage{
-plotCalibration(x, models, times, showPseudo, pseudo.col = NULL,
-  pseudo.pch = NULL, method = "nne", round = TRUE, bandwidth = NULL,
-  q = 10, bars = FALSE, hanging = FALSE, names = "quantiles",
-  showFrequencies = FALSE, jack.density = 55, plot = TRUE, add = FALSE,
-  diag = !add, legend = !add, axes = !add, xlim = c(0, 1), ylim = c(0,
-  1), xlab = ifelse(bars, "Risk groups", "Predicted risk"),
+plotCalibration(x, models, times, method = "nne", round = TRUE,
+  bandwidth = NULL, q = 10, bars = FALSE, hanging = FALSE,
+  names = "quantiles", pseudo, rug, show.frequencies = FALSE, plot = TRUE,
+  add = FALSE, diag = !add, legend = !add, auc.in.legend = TRUE,
+  brier.in.legend = TRUE, axes = !add, xlim = c(0, 1), ylim = c(0, 1),
+  xlab = ifelse(bars, "Risk groups", "Predicted risk"),
   ylab = "Observed frequency", col, lwd, lty, pch, type, cause = 1,
   percent = TRUE, na.action = na.fail, cex = 1, ...)
 }
@@ -19,13 +19,6 @@ plotCalibration(x, models, times, showPseudo, pseudo.col = NULL,
 \item{models}{Choice of models to plot}
 
 \item{times}{Time point specifying the prediction horizon.}
-
-\item{showPseudo}{If \code{TRUE} the pseudo-values are shown as
-dots on the plot (only when \code{pseudo=TRUE}).}
-
-\item{pseudo.col}{Colour for pseudo-values.}
-
-\item{pseudo.pch}{Dot type (see par) for pseudo-values.}
 
 \item{method}{The method for estimating the calibration curve(s):
 
@@ -53,10 +46,13 @@ corresponding prediction.}
 \item{names}{Barplots only. Names argument passed to
 \code{names.arg} of \code{barplot}.}
 
-\item{showFrequencies}{Barplots only. If \code{TRUE}, show
-frequencies above the bars.}
+\item{pseudo}{If \code{TRUE} show pseudo values (only for right
+censored data).}
 
-\item{jack.density}{Gray scale for pseudo-observations.}
+\item{rug}{If \code{TRUE} show rug plot at the predictions}
+
+\item{show.frequencies}{Barplots only. If \code{TRUE}, show
+frequencies above the bars.}
 
 \item{plot}{If \code{FALSE}, do not plot the results, just return
 a plottable object.}
@@ -67,6 +63,11 @@ plot.}
 \item{diag}{If \code{FALSE} no diagonal line is drawn.}
 
 \item{legend}{Logical. If \code{TRUE} draw legend.}
+
+\item{auc.in.legend}{Logical. If \code{TRUE} add AUC to legend.}
+
+\item{brier.in.legend}{Logical. If \code{TRUE} add Brier score to
+legend.}
 
 \item{axes}{If \code{FALSE} no axes are drawn.}
 
@@ -103,19 +104,32 @@ interpretable on a percent scale.}
 \item{cex}{Default cex used for legend and labels.}
 
 \item{...}{Used to control the subroutines: plot, axis, lines,
-barplot, legend. See \code{\link{SmartControl}}.}
+barplot, legend, addtable2plot, points (pseudo values), rug. See
+\code{\link{SmartControl}}.}
 }
 \description{
 Plot Calibration curve
 }
 \examples{
+# binary 
 db=sampleData(100,outcome="binary")
 fb1=glm(Y~X1+X5+X7,data=db,family="binomial")
 fb2=glm(Y~X1+X3+X6+X7,data=db,family="binomial")
 xb=Score(list(model1=fb1,model2=fb2),Y~1,data=db,
-          plots="cal",metrics=NULL)
+          plots="cal")
 plotCalibration(xb)
 
+# survival
+library(survival)
+ds=sampleData(100,outcome="survival")
+fs1=coxph(Surv(time,event)~X1+X5+X7,data=ds,x=1)
+fs2=coxph(Surv(time,event)~X1+X3+X6+X7,data=ds,x=1)
+xs=Score(list(Cox1=fs1,Cox2=fs2),Surv(time,event)~1,data=ds,
+          plots="cal",metrics=NULL)
+plotCalibration(xs)
+
+
+# competing risks
 data(Melanoma)
 f1 <- CSC(Hist(time,status)~age+sex+epicel+ulcer,data=Melanoma)
 f2 <- CSC(Hist(time,status)~age+sex+logthick+epicel+ulcer,data=Melanoma)

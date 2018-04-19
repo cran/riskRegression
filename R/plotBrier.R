@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Feb 23 2017 (11:07) 
 ## Version: 
-## last-updated: Jun 29 2017 (16:26) 
+## last-updated: Oct 13 2017 (13:08) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 34
+##     Update #: 43
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -32,7 +32,7 @@
 #' @param type line type
 #' @param axes Logical. If \code{TRUE} draw axes.
 #' @param percent Logical. If \code{TRUE} scale y-axis in percent.
-#' @param confint Logical. If \code{TRUE} draw confidence shadows.
+#' @param conf.int Logical. If \code{TRUE} draw confidence shadows.
 #' @param legend Logical. If \code{TRUE} draw legend.
 #' @param ... Used for additional control of the subroutines: plot,
 #'     axis, lines, legend. See \code{\link{SmartControl}}.
@@ -63,10 +63,10 @@ plotBrier <- function(x,
                       type="l",
                       axes=1L,
                       percent=1L,
-                      confint=0L,
+                      conf.int=0L,
                       legend=1L,
                       ...){
-    times=contrast=model=se.Brier=se.delta=Brier=lower.Brier=upper.Brier=lower=upper=delta=reference=NULL
+    times=contrast=model=se=Brier=lower=upper=delta.Brier=reference=NULL
     ## cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     pframe <- switch(which,"score"={copy(x$Brier$score)},"contrasts"={copy(x$Brier$contrasts)},{stop("argument 'which' has to be either 'score' for Brier or 'contrasts' for differences in Brier.")})
@@ -74,13 +74,13 @@ plotBrier <- function(x,
     if (!missing(models)) pframe <- pframe[model %in% models]
     if (which=="score"){
         mm <- unique(pframe$model)
-        pframe[is.na(se.Brier)&times==0,lower.Brier:=0]
-        pframe[is.na(se.Brier)&times==0,upper.Brier:=0]
+        pframe[is.na(se)&times==0,lower:=0]
+        pframe[is.na(se)&times==0,upper:=0]
     }else{
         pframe[,contrast:=factor(paste(model,reference,sep=" - "))]
         mm <- unique(pframe$contrast)
-        pframe[is.na(se.delta)&times==0,lower:=0]
-        pframe[is.na(se.delta)&times==0,upper:=0]
+        pframe[is.na(se)&times==0,lower:=0]
+        pframe[is.na(se)&times==0,upper:=0]
     }
     lenmm <- length(mm)
     if(missing(xlab)) xlab <- "Time"
@@ -98,12 +98,11 @@ plotBrier <- function(x,
     lty <- rep(lty,length.out=lenmm)
     names(lty) <- mm
     if (missing(xlim)) xlim <- pframe[,range(times)]
-    if (missing(ylim))
+    if (missing(ylim)){
         if (which=="score") {
             ylim <- c(0,.3)
             axis2.DefaultArgs <- list(side=2,las=2,at=seq(0,ylim[2],ylim[2]/4),mgp=c(4,1,0))
-        }
-        else{
+        } else{
             ylim <- c(floor(10*min(pframe$lower))/10,ceiling(10*max(pframe$upper))/10)
             yat <- seq(ylim[1],ylim[2],0.05)
             ## this is a strange behaviour of R: seq(-0.6,.1,0.05)
@@ -113,6 +112,9 @@ plotBrier <- function(x,
             ## axis2.DefaultArgs <- list(side=2,las=2,at=seq(ylim[1],ylim[2],abs(ylim[2]-ylim[1])/4),mgp=c(4,1,0))
             axis2.DefaultArgs <- list(side=2,las=2,at=yat,mgp=c(4,1,0))
         }
+    }else{
+        axis2.DefaultArgs <- list(side=2,las=2,at=seq(ylim[1],ylim[2],abs(ylim[2]-ylim[1])/4),mgp=c(4,1,0))
+    }
     lines.DefaultArgs <- list(pch=pch,type=type,cex=cex,lwd=lwd,col=col,lty=lty)
     axis1.DefaultArgs <- list(side=1,las=1,at=seq(0,xlim[2],xlim[2]/4))
     if (which=="score"){
@@ -156,7 +158,7 @@ plotBrier <- function(x,
             thisline$pch=thisline$pch[[as.character(contrast[1])]];
             thisline$type=thisline$type[[as.character(contrast[1])]];
             thisline$x=times;
-            thisline$y=delta;
+            thisline$y=delta.Brier;
             do.call("lines",thisline)},by=contrast]
     }
     ## legend
@@ -164,11 +166,11 @@ plotBrier <- function(x,
         do.call("legend",control$legend)
     }
     ## x-axis
-    if (confint==TRUE){
+    if (conf.int==TRUE){
         dimcol <- sapply(col,function(cc){prodlim::dimColor(cc)})
         names(dimcol) <- names(col)
         if (which=="score"){
-            pframe[,polygon(x=c(times,rev(times)),y=c(lower.Brier,rev(upper.Brier)),col=dimcol[[as.character(model)]],border=NA),by=model]
+            pframe[,polygon(x=c(times,rev(times)),y=c(lower,rev(upper)),col=dimcol[[as.character(model)]],border=NA),by=model]
         }else{
             pframe[,polygon(x=c(times,rev(times)),y=c(lower,rev(upper)),col=dimcol[[as.character(contrast)]],border=NA),by=contrast]
         }

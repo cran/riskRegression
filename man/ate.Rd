@@ -2,42 +2,57 @@
 % Please edit documentation in R/ate.R
 \name{ate}
 \alias{ate}
-\title{Compute the average treatment effect using CSC.}
+\title{Compute the average treatment effects via the g-formula}
 \usage{
-ate(object, data, treatment, contrasts = NULL, times, cause,
-  conf.level = 0.95, se = TRUE, band = FALSE, B = 0, nSim.band = 1000,
-  seed, handler = c("mclapply", "foreach"), mc.cores = 1, verbose = TRUE,
-  logTransform = FALSE, store.iid = "full", ...)
+ate(object, data, formula, treatment, contrasts = NULL, times, cause,
+  landmark, conf.level = 0.95, se = TRUE, band = FALSE, B = 0,
+  bootci.method = "perc", nsim.band = ifelse(band, 1000, 0), seed,
+  handler = "foreach", mc.cores = 1, verbose = TRUE, store.iid = "full",
+  ...)
 }
 \arguments{
-\item{object}{outcome model which describes how event risk depends on treatment and covariates.
-The object carry its own call and have a \code{predictRisk} method. See examples.}
+\item{object}{outcome model which describes how event risk depends
+on treatment and covariates.  The object carry its own call and
+have a \code{predictRisk} method. See examples.}
 
-\item{data}{data set in which to evaluate risk predictions based on the outcome model}
+\item{data}{data set in which to evaluate risk predictions based on
+the outcome model}
+
+\item{formula}{For analyses with time-dependent covariates, the response formula. See examples.}
 
 \item{treatment}{name of the treatment variable}
 
-\item{contrasts}{the levels of treatment variable to be compared}
+\item{contrasts}{the levels of the treatment variable to be
+compared}
 
 \item{times}{time points at which to evaluate risks}
 
 \item{cause}{the cause of interest}
 
-\item{conf.level}{Numeric. Confidence level of the confidence intervals.}
+\item{landmark}{for models with time-dependent covariates the landmark time(s) of evaluation.
+In this case, argument \code{time} may only be one value and for the prediction of risks
+it is assumed that that the covariates do not change between landmark and landmark+time.}
 
-\item{se}{Logical. If \code{TRUE} add the standard errors and confidence intervals
-to the output.}
+\item{conf.level}{Numeric value between 0 and 1 (default is 0.05). Confidence level of the confidence intervals.}
 
-\item{band}{Logical. If \code{TRUE} add the confidence bands to the output.}
+\item{se}{Logical. If \code{TRUE} compute standard errors and confidence intervals}
+
+\item{band}{Logical. If \code{TRUE} compute confidence bands across time points.}
 
 \item{B}{the number of bootstrap replications used to compute the
-confidence intervals. If it equals 0, then Wald-type confidence intervals are computed.
-They rely on the standard error estimated using the influence function of the estimator.}
+confidence intervals. If it equals 0, then Wald-type confidence
+intervals are computed.  They rely on the standard error
+estimated using the influence function of the estimator.}
 
-\item{nSim.band}{the number of simulations used to compute the quantiles for the confidence bands.}
+\item{bootci.method}{Character. Method for constructing bootstrap confidence intervals.
+Either "perc" (the default), "norm", "basic", "stud", or "bca".
+Argument passed to \code{boot::boot.ci}.}
+
+\item{nsim.band}{the number of simulations used to compute the
+quantiles for the confidence bands.}
 
 \item{seed}{An integer used to generate seeds for bootstrap and to
-achieve reproducibility of the bootstrap confidence intervals.}
+achieve reproducible results.}
 
 \item{handler}{parallel handler for bootstrap. Either "mclapply" or
 "foreach". If "foreach" use \code{doParallel} to create a cluster.}
@@ -51,71 +66,205 @@ set.}
 \item{verbose}{Logical. If \code{TRUE} inform about estimated run
 time.}
 
-\item{logTransform}{Should the confidence interval for the ratio be computed using a log-tranformation. Only active if Wald-type confidence intervals are computed.}
-
 \item{store.iid}{Implementation used to estimate the standard error. Can be \code{"full"} or \code{"minimal"}.
 \code{"minimal"} requires less memory but can only estimate the standard for the difference between treatment effects (and not for the ratio).}
 
 \item{...}{passed to predictRisk}
 }
 \value{
-A list with: point estimates, bootstrap quantile confidence
-    intervals model: the CSC model (optional)
+An object of class \code{ate} containing:
+\itemize{
+\item meanRisk: a \code{data.table} object containing the ATE at each time and for each treatment level.
+\item riskComparison: a \code{data.table} object comparing the ATE between two treatment levels.
+\item treatment: the name of the treatment variable.
+\item contrasts: the levels of the treatment variable that were compared.
+\item times: the time points at which the ATE was computed.
+\item se: Logical. if \code{TRUE} compute the standard errors and confidence intervals of the ATE
+\item B: the number of bootstrap samples.
+\item band: Logical. If \code{TRUE} confidence bands are computed.
+\item nsim.band: the number of simulations used to compute the quantiles for the confidence bands.
+\item seeds: the seed used to generate the boostrap sample. Not used when the
+influence function is used to compute the standard errors of the ATE.
+\item conf.level: the confidence level of the confidence intervals.
+}
 }
 \description{
-Use the g-formula to estimate the average treatment effect
-}
-\details{
-WARNING: the p.value and the confidence intervals for the ratio using Wald-type approximations are still experimental.
+Use the g-formula to estimate the average treatment
+    effect based on Cox regression with or without competing risks
 }
 \examples{
 library(survival)
 library(rms)
 
 set.seed(10)
-n <- 100
 
-## Cox model
-dtS <- sampleData(n,outcome="survival")
+#### Survival settings  ####
+#### ATE with Cox model ####
+
+## generate data
+n <- 100
+dtS <- sampleData(n, outcome="survival")
 dtS$time <- round(dtS$time,1)
 dtS$X1 <- factor(rbinom(n, prob = c(0.3,0.4) , size = 2), labels = paste0("T",0:2))
 
-fit=cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
+## estimate the Cox model
+fit <- cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
 
+## compute the ATE at times 5, 6, 7, and 8 using X1 as the treatment variable
 \dontrun{
-ateFit1 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-        times = 5:8, B = 1e3, y = TRUE,  mc.cores=1)
+## only punctual estimate (argument se = FALSE)
+ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
+               se = FALSE)
 
-ateFit1 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-        times = 5:8, B = 1e1, y = TRUE,  mc.cores=1)
-ateFit2 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-        times = 5:8, B = 0, y = TRUE, band = TRUE, mc.cores=1)
+## standard error / confidence intervals computed using the influence function
+## (argument se = TRUE and B = 0)
+ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
+               se = TRUE, B = 0)
 
-ateFit3 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-           times = 5:8, B = 0, y = TRUE, band = TRUE, mc.cores=1,
-           store.iid = "minimal")
+## bootstrap confidence intervals: studentized Wald type 
+ateFit1c <- ate(fit, data = dtS, treatment = "X1", times = 5,
+               seed=3,se = TRUE, B = 100)
+## bootstrap confidence intervals: studentized Wald type 
+ateFit1d <- ate(fit, data = dtS, treatment = "X1", times = 5,
+                seed=3,bootci.method="quantile",se = TRUE, B = 100)
+
+## same as before with in addition the confidence bands for the ATE
+## (argument band = TRUE)
+ateFit1c <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
+               se = TRUE, band = TRUE, B = 0)
+
+## standard error / confidence intervals computed using 100 boostrap samples
+## (argument se = TRUE and B = 100) 
+ateFit1d <- ate(fit, data = dtS, treatment = "X1",
+                times = 5:8, se = TRUE, B = 100)
+## NOTE: for real applications 100 bootstrap samples is not enougth 
+
+## same but using 2 cpus for generating and analyzing the boostrap samples
+## (parallel computation, argument mc.cores = 2) 
+ateFit1e <- ate(fit, data = dtS, treatment = "X1",
+                times = 5:8, se = TRUE, B = 100, mc.cores = 2)
 }
 
-## Competing risks: Cause specific Cox regression
+#### Survival settings without censoring ####
+#### ATE with glm                        ####
+
+## generate data
+n <- 100
+dtS <- sampleData(n, outcome="survival")
+dtS[, event5 := eventtime<=5]
+dtS[, X2 := as.numeric(X2)]
+
+## estimate the Cox model
+fit <- glm(formula = event5 ~ X1+X2, data=dtS, family = "binomial")
+
+## compute the ATE at times 5 using X1 as the treatment variable
+## only punctual estimate (argument se = FALSE)
+ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5,
+               se = FALSE)
+ateFit1a
+
 \dontrun{
-set.seed(17)
-n=100
-dt <- sampleData(n,outcome="competing.risks")
+## standard error / confidence intervals computed using the influence function
+ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5,
+               se = TRUE, B = 0)
+ateFit1b
+
+## standard error / confidence intervals computed using 100 boostrap samples
+ateFit1d <- ate(fit, data = dtS, treatment = "X1",
+                times = 5, se = TRUE, B = 100)
+ateFit1d
+
+## using lava
+ateLava <- estimate(fit, function(p, data){
+a <- p["(Intercept)"] ; b <- p["X11"] ; c <- p["X2"] ;
+R.X11 <- expit(a + b + c * data[["X2"]])
+R.X10 <- expit(a + c * data[["X2"]])
+list(risk0=R.X10,risk1=R.X11,riskdiff=R.X10-R.X11)},
+average=TRUE)
+ateLava
+}
+
+#### Competing risks settings               ####
+#### ATE with cause specific Cox regression ####
+
+\dontrun{
+## generate data
+n <- 500
+dt <- sampleData(n, outcome="competing.risks")
 dt$time <- round(dt$time,1)
 dt$X1 <- factor(rbinom(n, prob = c(0.2,0.3,0.2) , size = 3), labels = paste0("T",0:3))
-fitCR= CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
-ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-        times = 7, cause = 1, B = 2, mc.cores=1)
 
-atefit=ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-        times = 1:7, cause = 1, mc.cores=1, se = FALSE, band = FALSE)
+## estimate cause specific Cox model
+fitCR <-  CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
 
+## compute the ATE at times 5, 6, 7, and 8 using X1 as the treatment variable
+ateFit2a <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+               se = FALSE)
 
- ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-        times = 5:7, cause = 1, B = 0, se = TRUE, band = TRUE, mc.cores=1)
+## standard error / confidence intervals computed using the influence function
+## (argument se = TRUE and B = 0)
+ateFit2b <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+               se = TRUE, B = 0)
+
+## same as before with in addition the confidence bands for the ATE
+## (argument band = TRUE)
+ateFit2c <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+               se = TRUE, band = TRUE, B = 0)
+
+## standard error / confidence intervals computed using 100 boostrap samples
+## (argument se = TRUE and B = 100) 
+ateFit2d <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+                se = TRUE, B = 100)
+## NOTE: for real applications 100 bootstrap samples is not enougth 
+
+## same but using 2 cpus for generating and analyzing the boostrap samples
+## (parallel computation, argument mc.cores = 2) 
+ateFit2e <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+                se = TRUE, B = 100, mc.cores = 2)
 }
 
+#### time-dependent covariates ###
+\dontrun{
+library(survival)
+fit <- coxph(Surv(time, status) ~ celltype+karno + age + trt, veteran)
+vet2 <- survSplit(Surv(time, status) ~., veteran,
+                       cut=c(60, 120), episode ="timegroup")
+fitTD <- coxph(Surv(tstart, time, status) ~ celltype+karno + age + trt,
+               data= vet2,x=1)
+set.seed(16)
+resVet <- ate(fitTD,formula=Hist(entry=tstart,time=time,event=status)~1,
+          data = vet2, treatment = "celltype", contrasts = NULL,
+        times=5,verbose=1,
+        landmark = c(0,30,60,90), cause = 1, B = 20, se = 1,
+        band = FALSE, mc.cores=1)
+resVet
+}
+
+\dontrun{
+set.seed(137)
+d=sampleDataTD(127)
+library(survival)
+d[,status:=1*(event==1)]
+## ignore competing risks
+cox1TD <- coxph(Surv(start,time, status,type="counting") ~ X3+X5+X6+X8, data=d)
+resTD1 <- ate(cox1TD,formula=Hist(entry=start,time=time,event=status)~1,
+        data = d, treatment = "X3", contrasts = NULL,
+        times=.5,verbose=1,
+        landmark = c(0,0.5,1), B = 20, se = 1,
+        band = FALSE, mc.cores=1)
+resTD1
+## adjust for competing risks
+cscTD <- CSC(Hist(time=time, event=event,entry=start) ~ X3+X5+X6+X8, data=d)
+set.seed(16)
+resTD <- ate(cscTD,formula=Hist(entry=start,time=time,event=event)~1,
+        data = d, treatment = "X3", contrasts = NULL,
+        times=.5,verbose=1,
+        landmark = c(0,0.5,1), cause = 1, B = 20, se = 1,
+        band = FALSE, mc.cores=1)
+resTD
+}
 }
 \author{
-Brice Ozenne \email{broz@sund.ku.dk} and Thomas Alexander Gerds \email{tag@biostat.ku.dk}
+Brice Ozenne \email{broz@sund.ku.dk} and Thomas Alexander
+    Gerds \email{tag@biostat.ku.dk}
 }

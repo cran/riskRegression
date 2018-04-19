@@ -7,7 +7,7 @@
 \method{predict}{CauseSpecificCox}(object, newdata, times, cause,
   landmark = NA, keep.times = 1L, keep.newdata = 1L, keep.strata = 1L,
   se = FALSE, band = FALSE, iid = FALSE, average.iid = FALSE,
-  nSim.band = 10000, logTransform = FALSE, productLimit = TRUE,
+  nsim.band = 10000, log.transform = TRUE, product.limit = TRUE,
   conf.level = 0.95, store.iid = "full", ...)
 }
 \arguments{
@@ -39,20 +39,20 @@ to the output.}
 
 \item{average.iid}{Logical. If \code{TRUE} add the average of the influence function over \code{newdata} to the output.}
 
-\item{nSim.band}{the number of simulations used to compute the quantiles
+\item{nsim.band}{the number of simulations used to compute the quantiles
 for the confidence bands.}
 
-\item{logTransform}{Should the confidence intervals/bands be computed on the
+\item{log.transform}{Should the confidence intervals/bands be computed on the
 log(-log) scale and be backtransformed.
 Otherwise they are computed on the original scale and truncated (if necessary).}
 
-\item{productLimit}{Logical. If true the survival is computed using the product limit estimator.
+\item{product.limit}{Logical. If true the survival is computed using the product limit estimator.
 Otherwise the exponential approximation is used (i.e. exp(-cumulative hazard)).}
 
 \item{conf.level}{Level of confidence.}
 
 \item{store.iid}{Implementation used to estimate the influence function and the standard error.
-Can be \code{"full"} or \code{"minimal"}. See the details section of \code{\link{calcSeCSC}}.}
+Can be \code{"full"} or \code{"minimal"}.}
 
 \item{...}{not used}
 }
@@ -63,6 +63,8 @@ A list containing:
 \item{absRisk.se}: (data table) the standard errors of the predictions.
 \item(absRisk.iid): (array) the value of the influence of each subject used to fit the object (dim 3)
 for each subject in newdata (dim 1) and each time (dim 2).
+\item(absRisk.average.iid): (matrix) the average value of the influence over the subjects in newdata,
+for each subject used to fit the object (dim 1) and each time (dim 2).
 \item{times}: (vector) the evaluation times.
 }
 }
@@ -70,51 +72,89 @@ for each subject in newdata (dim 1) and each time (dim 2).
 Apply formula to combine two or more Cox models into absolute risk (cumulative incidence function)
 }
 \details{
+This function computes the absolute risk as given by formula 2 of (Ozenne et al., 2017).
+Confidence intervals and confidence bands can be computed using a first order von Mises expansion.
+See the section "Construction of the confidence intervals" in (Ozenne et al., 2017).
+
+When setting \code{log.transform} to \code{TRUE}, the standard error that is returned is 
+before back-transformation to the original scale.
+
+A detailed explanation about the meaning of the argument \code{store.iid} can be found
+in (Ozenne et al., 2017) Appendix B "Saving the influence functions".
+
 Note: for Cox regression models with time varying
     covariates it does not make sense to use this function, because
     the predicted risk has to be a measurable function of the data
     available at the time origin.
-
-When setting \code{logTransform} to \code{TRUE}, the standard error that is returned is 
-before back-transformation to the original scale.
 }
 \examples{
+library(survival)
+
+## generate data
 set.seed(5)
-d <- sampleData(80,outcome="comp")
-nd <- sampleData(4,outcome="comp")
-d$time <- round(d$time,1)
+d <- sampleData(80,outcome="comp") ## training dataset
+nd <- sampleData(4,outcome="comp") ## validation dataset
+d$time <- round(d$time,1) ## create tied events
 ttt <- sort(sample(x = unique(d$time), size = 10))
 
-# coxph function
-CSC.fit <- CSC(Hist(time,event)~ X3+X8,data=d, method = "breslow")
-x= predict(CSC.fit,newdata=nd,times=1:10,cause=1,se=1L)
-px=print(x)
-px
-x2 = predict(CSC.fit,newdata=nd,times=1:10,cause=1,se=1L,
-           logTransform = TRUE)
+## estimate a CSC model based on the coxph function
+CSC.fit <- CSC(Hist(time,event)~ X3+X8, data=d, method = "breslow")
 
-predCSC <- predict(CSC.fit, newdata = d, cause = 2, times = ttt)
-predCSC.se <- predict(CSC.fit, newdata = d[1:5,], cause = 2, times = ttt,
-                      se = TRUE,keep.newdata=TRUE)
-predCSC.iid <- predict(CSC.fit, newdata = d[1:5,],
-                       cause = 2, times = ttt, iid = TRUE)
+## compute the absolute risk of cause 1, in the validation dataset
+## at time 1:10
+CSC.risk <-  predict(CSC.fit, newdata=nd, times=1:10, cause=1)
+CSC.risk
 
-# predCSC.se$absRisk.se
-# sqrt(apply(predCSC.iid$absRisk.iid[,1,]^2,1,function(x){sum(x)}))
-## strata
+## add the standard error/confidence intervals
+## (computed on the log log scale and backtransformed)
+CSC.riskSE <-  predict(CSC.fit,newdata=nd,times=1:10,cause=1,se=TRUE,
+                        log.transform = TRUE)
+as.data.table(CSC.riskSE)[1:5]
+exp(-exp(
+ log(-log(CSC.riskSE$absRisk)) - 1.96 * CSC.riskSE$absRisk.se
+))
+
+## extract the iid for the absolute risk
+CSC.iid <- predict(CSC.fit, newdata = d, se = TRUE,
+                   cause = 1, times = ttt[1], iid = TRUE,
+                   log.transform = FALSE)
+rowMeans(CSC.iid$absRisk.iid[,1,]) ## the iid decomposition has 0 expectation
+sqrt(rowSums(CSC.iid$absRisk.iid[,1,]^2))[1:5]
+as.data.table(CSC.iid)[1:5]
+
+## same but the iid decomposition is averaged over the patients
+CSC.aviid <- predict(CSC.fit, newdata = d,
+                   cause = 1, times = ttt[1],
+                   average.iid = TRUE,
+                   log.transform = FALSE)
+CSC.aviid$absRisk.average.iid[1:5,]
+colMeans(CSC.iid$absRisk.iid[,1,1:5])
+
+## compute absolute risks with CI for cause 2
+## (without displaying the value of the covariates)
+predict(CSC.fit,newdata=nd,times=1:10,cause=2,se=TRUE,
+        log.transform = TRUE, keep.newdata = FALSE)
+
+## other example
+library(survival)
 CSC.fit.s <- CSC(list(Hist(time,event)~ strata(X1)+X2+X9,
  Hist(time,event)~ X2+strata(X4)+X8+X7),data=d, method = "breslow")
-predict(CSC.fit.s,cause=1,times=ttt,se=1L)
-# cph function
-CSC.cph <- CSC(Hist(time,event)~ X1+X2,data=d, method = "breslow", fitter = "cph")
+predict(CSC.fit.s,cause=1,times=ttt,se=1L) ## note: absRisk>1 due to small number of observations
 
+## using the cph function instead of coxph
+CSC.cph <- CSC(Hist(time,event)~ X1+X2,data=d, method = "breslow", fitter = "cph")#' 
 predict(CSC.cph, newdata = d, cause = 2, times = ttt)
 
-# landmark analysis
+## landmark analysis
 T0 <- 1
 predCSC_afterT0 <- predict(CSC.fit, newdata = d, cause = 2, times = ttt[ttt>T0], landmark = T0)
 predCSC_afterT0
 
+}
+\references{
+Brice Ozenne, Anne Lyngholm Sorensen, Thomas Scheike, Christian Torp-Pedersen and Thomas Alexander Gerds.
+riskRegression: Predicting the Risk of an Event using Cox Regression Models.
+The R Journal (2017) 9:2, pages 440-460.
 }
 \author{
 Brice Ozenne broz@sund.ku.dk, Thomas A. Gerds

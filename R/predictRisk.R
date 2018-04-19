@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02) 
 ## Version: 
-## last-updated: Mar  3 2017 (17:23) 
+## last-updated: Apr 18 2018 (15:08) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 43
+##     Update #: 110
 #----------------------------------------------------------------------
 ## 
 ### Commentary:
@@ -19,7 +19,7 @@
 # --------------------------------------------------------------------
 #' Extrating predicting risks from regression models 
 #' 
-#' Extract event probabilities from fitted regression models and machine learning objects. 
+#' Extract event probabilities from fitted regression models and machine learning objects.
 #' 
 #' The function predictRisk is a generic function, meaning that it invokes
 #' specifically designed functions depending on the 'class' of the first
@@ -32,10 +32,10 @@
 #' predictRisk.prodlim predictRisk.rfsrc predictRisk.aalen
 #' predictRisk.riskRegression predictRisk.cox.aalen
 #' predictRisk.coxph predictRisk.cph predictRisk.default
-#' predictRisk.rfsrc predictRisk.matrix predictRisk.pecCtree
+#' predictRisk.matrix predictRisk.pecCtree
 #' predictRisk.pecCforest predictRisk.prodlim predictRisk.psm
 #' predictRisk.selectCox predictRisk.survfit predictRisk.randomForest
-#' predictRisk.lrm predictRisk.default predictRisk.glm
+#' predictRisk.lrm predictRisk.glm
 #' predictRisk.rpart
 #' @usage
 #' \method{predictRisk}{glm}(object,newdata,...)
@@ -66,6 +66,22 @@
 #' rows the values should be increasing.
 #' @author Thomas A. Gerds \email{tag@@biostat.ku.dk}
 #' @seealso See \code{\link{predictRisk}}.
+#' @details
+#' In uncensored binary outcome data there is no need to choose a time point.
+#'
+#' When operating on models for survival analysis (without competing risks) the function still
+#' predicts the risk, as 1 - S(t|X) where S(t|X) is survival chance of a subject characterized
+#' by X.
+#'
+#' When there are competing risks (and the data are right censored) one needs
+#' to specify both the time horizon for prediction (can be a vector) and the
+#' cause of the event. The function then extracts the absolute risks F_c(t|X)
+#' aka the cumulative incidence of an event of type/cause c until time t for a
+#' subject characterized by X. Depending on the model it may or not be possible
+#' to predict the risk of all causes in a competing risks setting. For example. a
+#' cause-specific Cox (CSC) object allows to predict both cases whereas a Fine-Gray regression
+#' model (FGR) is specific to one of the causes. 
+#' 
 #' @keywords survival
 #' @examples
 #' ## binary outcome
@@ -82,6 +98,8 @@
 ##' library(prodlim)
 ##' set.seed(100)
 ##' d <- sampleData(100,outcome="survival")
+##' d[,X1:=as.numeric(as.character(X1))]
+##' d[,X2:=as.numeric(as.character(X2))]
 ##' # then fit a Cox model
 ##' library(rms)
 ##' cphmodel <- cph(Surv(time,event)~X1+X2,data=d,surv=TRUE,x=TRUE,y=TRUE)
@@ -117,9 +135,9 @@
 ##' ## one row for each validation set individual
 ##' 
 ##' # Do the same for a randomSurvivalForest model
-##' library(randomForestSRC)
-##' rsfmodel <- rfsrc(Surv(time,event)~X1+X2,data=learndat)
-##' prsfsurv=predictRisk(rsfmodel,newdata=valdat,times=seq(0,60,12))
+##' # library(randomForestSRC)
+##' # rsfmodel <- rfsrc(Surv(time,event)~X1+X2,data=learndat)
+##' # prsfsurv=predictRisk(rsfmodel,newdata=valdat,times=seq(0,60,12))
 ##' # plot(psurv,prsfsurv)
 ##' 
 ##' ## Cox with ridge option
@@ -155,7 +173,7 @@ predictRisk <- function(object,newdata,...){
 
 ##' @export 
 predictRisk.default <- function(object,newdata,times,cause,...){
-  stop("No method for evaluating predicted probabilities from objects in class: ",class(object),call.=FALSE)
+    stop(paste0("No method available for evaluating predicted probabilities from objects in class: ",class(object),". But, you can write it yourself or ask the package manager."),call.=FALSE)
 }
 
 ##' @export
@@ -305,18 +323,80 @@ predictRisk.cox.aalen <- function(object,newdata,times,...){
 ##' @export
 predictRisk.coxph <- function(object,newdata,times,...){
     p <- predictCox(object=object,
-                      newdata=newdata,
-                      times=times,
-                      se = FALSE,
-                      iid = FALSE,
-                      keep.times=FALSE,
-                      type="survival")$survival
+                    newdata=newdata,
+                    times=times,
+                    se = FALSE,
+                    iid = FALSE,
+                    keep.times=FALSE,
+                    type="survival")$survival
 
     if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)){
         stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
     }
     return(1-p)
 }
+
+##' @export
+predictRisk.coxphTD <- function(object,newdata,times,landmark,...){
+    stopifnot(attr(object$y,"type")=="counting")
+    bh <- survival::basehaz(object,centered=TRUE)
+    Lambda0 <- bh[,1]
+    etimes <- bh[,2]
+    lp <- predict(object,newdata=newdata,type="lp")
+    p <- do.call("cbind",lapply(times,function(ttt){
+        index <- prodlim::sindex(eval.times=c(landmark,landmark+ttt),jump.times=etimes)
+        Lambda0.diff <- c(0,Lambda0)[1+index[2]] - c(0,Lambda0)[1+index[1]]
+        1-exp(-Lambda0.diff * exp(lp))
+    }))
+    if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)){
+        stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
+    }
+    return(p)
+}
+
+##' @export
+predictRisk.CSCTD <- function(object,newdata,times,cause,landmark,...){
+    stopifnot(attr(object$models[[1]]$y,"type")=="counting")
+    if (missing(cause)) cause <- object$theCause
+    else{
+        ## cause <- prodlim::checkCauses(cause,object$response)
+        cause <- unique(cause)
+        if (!is.character(cause)) cause <- as.character(cause)
+        fitted.causes <- prodlim::getStates(object$response)
+        if (!(all(cause %in% fitted.causes))){
+            stop(paste0("Cannot find requested cause(s) in object\n\n",
+                        "Requested cause(s): ",
+                        paste0(cause,collapse=", "),
+                        "\n Available causes: ",
+                        paste(fitted.causes,collapse=", "),"\n"))
+        }
+    }
+    causes <- object$causes
+    index.cause <- which(causes == cause)
+    bh <- lapply(1:length(object$models),function(m){
+        survival::basehaz(object$models[[m]],centered=TRUE)
+    })
+    lp <- lapply(1:length(object$models),function(m){
+        predict(object$models[[m]],
+                newdata=newdata,
+                type="lp")
+    })
+    p <- do.call("cbind",lapply(times,function(ttt){
+        hazard <- lapply(1:length(object$models),function(m){
+            index <- sindex(eval.times=c(landmark,landmark+ttt),jump.times=bh[[m]][,2])
+            bh.m <- bh[[m]][,1]
+            exp(lp[[m]])*(c(0,bh.m)[1+index[2]] - c(0,bh.m)[1+index[1]])
+        })
+        surv <- exp(- Reduce("+",hazard))
+        surv*hazard[[index.cause]]
+    }))
+    if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)){
+        stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
+    }
+    return(p)
+}
+
+
 ## predictRisk.coxph <- function(object,newdata,times,...){
 ## baselineHazard.coxph(object,times)
 ## require(survival)
@@ -396,7 +476,13 @@ predictRisk.prodlim <- function(object,newdata,times,cause,...){
     ## require(prodlim)
     if (object$model=="competing.risks" && missing(cause))
         stop(paste0("Cause is missing. Should be one of the following values: ",paste(attr(object$model.response,"states"),collapse=", ")))
-    p <- predict(object=object,cause=cause,type="cuminc",newdata=newdata,times=times,mode="matrix",level.chaos=1)
+    p <- predict(object=object,
+                 cause=cause,
+                 type="cuminc",
+                 newdata=newdata,
+                 times=times,
+                 mode="matrix",
+                 level.chaos=1)
     ## if the model has no covariates
     ## then all cases get the same prediction
     ## in this exceptional case we return a vector
@@ -500,13 +586,14 @@ predictRisk.rfsrc <- function(object, newdata, times, cause, ...){
         p
     }else{
         if (object$family=="surv") {
-            ptemp <- predict(object,newdata=newdata,importance="none",...)$survival
+            ptemp <- 1-predict(object,newdata=newdata,importance="none",...)$survival
             pos <- prodlim::sindex(jump.times=object$time.interest,eval.times=times)
             p <- cbind(1,ptemp)[,pos+1,drop=FALSE]
             if (NROW(p) != NROW(newdata) || NCOL(p) != length(times))
                 stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
             p
         }else{
+            if (is.character(cause)) cause <- as.numeric(cause)
             if (!is.numeric(cause)) stop("cause is not numeric")
             cif <- predict(object,newdata=newdata,importance="none",...)$cif[,,cause,drop=TRUE]
             pos <- prodlim::sindex(jump.times=object$time.interest,eval.times=times)
@@ -568,6 +655,9 @@ predictRisk.CauseSpecificCox <- function (object, newdata, times, cause, ...) {
     p
 }
 
+
+
+
 ##' S3-wrapper for S4 function penalized
 ##'
 ##' S3-wrapper for S4 function penalized
@@ -594,13 +684,14 @@ predictRisk.CauseSpecificCox <- function (object, newdata, times, cause, ...) {
 ##' predictRisk(fitlasso,newdata=newd)
 ##' # predictRisk(fitnet,newdata=newd)
 ##' Score(list(fitridge),data=newd,formula=Y~1)
-##' Score(list(fitridge),data=newd,formula=Y~1,splitMethod="bootcv",B=2)
+##' Score(list(fitridge),data=newd,formula=Y~1,split.method="bootcv",B=2)
 ##' }
-##'\dontrun{ data(nki70) ## S4 fit pen <- penalized(Surv(time, event),
-##' penalized = nki70[,8:77], unpenalized = ~ER+Age+Diam+N+Grade, data
-##' = nki70, lambda1 = 1) penS3 <-
-##' penalizedS3(Surv(time,event)~ER+Age+Diam+pen(8:77)+N+Grade,
-##' data=nki70, lambda1=1)
+##'\dontrun{ data(nki70) ## S4 fit
+##' pen <- penalized(Surv(time, event), penalized = nki70[,8:77],
+##'                  unpenalized = ~ER+Age+Diam+N+Grade, data = nki70,
+##' lambda1 = 1)
+##' penS3 <- penalizedS3(Surv(time,event)~ER+Age+Diam+pen(8:77)+N+Grade,
+##'                      data=nki70, lambda1=1)
 ##' ## or
 ##' penS3 <- penalizedS3(Surv(time,event)~ER+pen(TSPYL5,Contig63649_RC)+pen(10:77)+N+Grade,
 ##'                      data=nki70, lambda1=1)

@@ -13,7 +13,7 @@ newdata <- d[1:10,]
 fit <- cox.aalen(Surv(time, event) ~ prop(X1) + prop(X2), data = d, max.timepoint.sim=NULL)
 fit.coxph <- coxph(Surv(time, event) ~ X1 + X2, data = d, x = TRUE, y = TRUE)
 
-object.design <- riskRegression:::CoxDesign.coxph(fit.coxph)
+object.design <- riskRegression:::coxDesign.coxph(fit.coxph)
 times <- unique(sort(object.design[object.design$status==1,"stop"]))
 # }}}
 
@@ -38,8 +38,8 @@ test_that("computation of the quantile for the confidence band of the cumhazard"
     set.seed(10)
     resRR <- riskRegression:::confBandCox(iid = pred$cumhazard.iid,
                                           se = pred$cumhazard.se,
-                                          times = times,
-                                          n.sim = n.sim, conf.level = 0.95)
+                                          n.sim = n.sim, 
+                                          conf.level = 0.95)
 
 
     
@@ -51,7 +51,7 @@ test_that("computation of the quantile for the confidence band of the cumhazard"
                          times = times,
                          se = TRUE,
                          band = TRUE,
-                         nSim.band = n.sim,
+                         nsim.band = n.sim,
                          type = c("cumhazard")
                          )
     expect_equal(predRR$quantile.band,ref)
@@ -62,26 +62,38 @@ test_that("computation of the quantile for the confidence band of the cumhazard"
 # }}}
 
 # {{{ display
-## predRR <- predictCox(fit.coxph,
-                     ## newdata = newdata[1,],
-                     ## times = times,
-                     ## se = TRUE,
-                     ## band = TRUE,
-                     ## nSim.band = 500,
-                     ## type = c("cumhazard","survival")
-                     ## )
+predRR <- predictCox(fit.coxph,
+                     newdata = newdata[1,],
+                     times = times,
+                     se = TRUE,
+                     band = TRUE,
+                     nsim.band = 500,
+                     type = c("cumhazard","survival")
+                     )
 
-## dev.new()
-## plotRR <- autoplot(predRR, type = "survival", band = TRUE, ci = TRUE, plot = FALSE)
-
-## dev.new()
-## plotTR <- plot.predict.timereg(resTimereg[[1]])
-## dev.new()
-## plotRR$plot + coord_cartesian(ylim = c(0,1))
+dev.new()
+plotRR <- autoplot(predRR, type = "survival", band = TRUE, ci = TRUE, plot = FALSE)
+dev.new()
+plotTR <- plot.predict.timereg(resTimereg[[1]])
+dev.new()
+plotRR$plot + coord_cartesian(ylim = c(0,1))
 
 # }}}
 
+# {{{ example
+test1 <- data.frame(time=c(4,3,1,1,2,2,3), 
+                    status=c(1,1,1,0,1,1,0), 
+                    x=c(0,2,1,1,1,0,0), 
+                    sex=c(0,0,0,0,1,1,1)) 
+# Fit a stratified model 
+m <- coxph(Surv(time, status) ~ x + strata(sex), 
+           data = test1, x = TRUE, y = TRUE) 
 
+set.seed(1)
+res <- predictCox(m, newdata = test1, times = 1:4, band = TRUE)
+# res$quantile.band
+# [1] 2.148709 2.288384 2.327076 2.327076 1.955180 1.951997 1.951997
+# }}}
 
 # }}}
 
@@ -99,13 +111,13 @@ res <- predict(fit.CSC,
                newdata = newdata,
                times = seqTimes-1e-5,
                band = TRUE,
-               nSim.band = 500,
+               nsim.band = 500,
                cause = 1)
 
 res <- predict(fit.CSC,
                newdata = newdata[1,,],
                times = seqTimes-1e-5,
-               nSim.band = 500,
+               nsim.band = 500,
                band = TRUE, se = TRUE,
                cause = 1)
 autoplot(res, band = TRUE, ci = TRUE)
@@ -145,3 +157,5 @@ d$event[d$event>0]
 ##           nObs = as.integer(nobs), nt = as.integer(nt), n = as.integer(n), 
 ##           se = as.double(se), mpt = double(n.sim * nobs), nSims = as.integer(n.sim), 
 ##           PACKAGE = "timereg")$mpt
+
+

@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun 23 2016 (09:19) 
 ## Version: 
-## last-updated: Jun 29 2017 (16:26) 
+## last-updated: Oct 21 2017 (10:11) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 53
+##     Update #: 68
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -14,9 +14,9 @@
 #----------------------------------------------------------------------
 ## 
 ### Code:
-##' Plot AUC curve
+##' ggplot AUC curves
 ##'
-##' @title Plot AUC curve
+##' @title ggplot AUC curve
 ##' @param x Object obtained with \code{Score.list}
 ##' @param models Choice of models to plot
 ##' @param type Character. Either \code{"score"} to show AUC or \code{"contrasts"} to show differences between AUC.
@@ -24,7 +24,7 @@
 ##' @param xlim Limits for x-axis
 ##' @param ylim Limits for y-axis
 ##' @param axes Logical. If \code{TRUE} draw axes.
-##' @param confint Logical. If \code{TRUE} draw confidence shadows.
+##' @param conf.int Logical. If \code{TRUE} draw confidence shadows.
 ##' @param ... Not yet used
 ##' @examples
 ##' library(survival)
@@ -33,17 +33,25 @@
 ##' f1=coxph(Surv(time,event)~X1+X6+X8,data=d,x=TRUE,y=TRUE)
 ##' f2=coxph(Surv(time,event)~X2+X5+X9,data=d,x=TRUE,y=TRUE)
 ##' xx=Score(list(f1,f2), formula=Surv(time,event)~1,
-##' data=nd, metrics="auc", nullModel=FALSE, times=seq(3:10))
+##' data=nd, metrics="auc", null.model=FALSE, times=seq(3:10))
 ##' aucgraph <- plotAUC(xx)
-##' plotAUC(xx,confint=TRUE)+ggtitle("AUC")+theme_classic()
+##' plotAUC(xx,conf.int=TRUE)+ggtitle("AUC")+theme_classic()
 ##' plotAUC(xx,type="contrasts")
-##' a=plotAUC(xx,type="contrasts",confint=TRUE)
+##' a=plotAUC(xx,type="contrasts",conf.int=TRUE)
 ##' a+theme_bw()
 ##' 
 #'
 #' @export
-plotAUC <- function(x,models,type="score",lwd=2,xlim,ylim,axes=TRUE,confint=FALSE,...){
-    times=contrast=model=AUC=lower.AUC=upper.AUC=lower=upper=delta=reference=NULL
+plotAUC <- function(x,
+                    models,
+                    type="score",
+                    lwd=2,
+                    xlim,
+                    ylim,
+                    axes=TRUE,
+                    conf.int=FALSE,
+                    ...){
+    times=contrast=model=AUC=lower=upper=lower=upper=delta.AUC=reference=NULL
     ## cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     pframe <- switch(type,"score"={x$AUC$score},"contrasts"={x$AUC$contrasts},{stop("Type has to be either 'score' for AUC or 'contrasts' for differences in AUC.")})
@@ -66,7 +74,8 @@ plotAUC <- function(x,models,type="score",lwd=2,xlim,ylim,axes=TRUE,confint=FALS
         if (missing(ylim)) ylim <- c(min(pframe$lower),max(pframe$upper))
         yticks <- seq(-1,1,0.05)
         yticks <- yticks[yticks>=ylim[1] & yticks<=ylim[2]]
-        pp <- ggplot(data=pframe,aes(times,delta,fill=contrast,colour=contrast)) 
+        pp <- ggplot(data=pframe,
+                     aes(times,delta.AUC,fill=contrast,colour=contrast)) 
     }
     ## x-axis
     ## pp <- pp+ geom_segment(aes(x=xlim[1],xend=xlim[2],y=ylim[1],yend=ylim[1]))
@@ -84,10 +93,10 @@ plotAUC <- function(x,models,type="score",lwd=2,xlim,ylim,axes=TRUE,confint=FALS
                                   limits=ylim,
                                   breaks=yticks,
                                   labels=paste(round(100*yticks,1),"%"))
-    if (confint==TRUE){
+    if (conf.int==TRUE){
         if (type=="score"){
-            ## pframe[,polygon(x=c(times,rev(times)),y=c(lower.AUC,rev(upper.AUC)),col=dimcol,border=NA),by=model]
-            pp <- pp + geom_ribbon(aes(ymin=lower.AUC,ymax=upper.AUC,fill=model,linetype=NA),alpha=0.2)
+            ## pframe[,polygon(x=c(times,rev(times)),y=c(lower,rev(upper)),col=dimcol,border=NA),by=model]
+            pp <- pp + geom_ribbon(aes(ymin=lower,ymax=upper,fill=model,linetype=NA),alpha=0.2)
         }else{
             pp <- pp + geom_ribbon(aes(ymin=lower,ymax=upper,fill=contrast,linetype=NA),alpha=0.2)
         }

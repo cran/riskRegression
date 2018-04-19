@@ -16,31 +16,6 @@ extractStrata(xterms, xlevels = NULL, special)
 \description{
 Extract the information about the strata stored in a Cox model
 }
-\examples{
-\dontrun{
-d <- sampleData(1e2, outcome = "survival")
-d$entry <- 0
-
-##
-library(survival)
-mCox <- coxph(Surv(time, event) ~ X1+X2, data = d)
-extractStrata(delete.response(mCox$terms), special = CoxSpecialStrata(mCox))
-
-mCox <- coxph(Surv(event, time = entry, time2 = time) ~ strata(X1)+strata(X2), data = d)
-extractStrata(delete.response(mCox$terms),
-              xlevels =  mCox$xlevels, special = CoxSpecialStrata(mCox))
-
-##
-library(rms)
-mCox <- cph(Surv(time, event) ~ X1+X2, data = d)
-extractStrata(delete.response(mCox$terms), special = CoxSpecialStrata(mCox))
-
-mCox <- cph(Surv(event, time = entry, time2 = time) ~ strat(X1)+strat(X2), data = d)
-extractStrata(delete.response(mCox$terms),
-              xlevels =  mCox$xlevels, special = CoxSpecialStrata(mCox))
-
-}
-}
 \author{
 Brice Ozenne broz@sund.ku.dk and Thomas A. Gerds tag@biostat.ku.dk
 }

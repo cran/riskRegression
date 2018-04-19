@@ -5,15 +5,15 @@
 \title{Plot ROC curves}
 \usage{
 plotROC(x, models, times, xlab = "1-Specificity", ylab = "Sensitivity", col,
-  lwd = 3, lty = 1, cex = 1, pch = 1, legend = TRUE, add = FALSE,
-  ...)
+  lwd, lty = 1, cex = 1, pch = 1, legend = TRUE, auc.in.legend = TRUE,
+  brier.in.legend = FALSE, add = FALSE, ...)
 }
 \arguments{
 \item{x}{Object obtained with function \code{Score}}
 
 \item{models}{Choice of models to plot}
 
-\item{times}{A single time point specifying the prediction horizon}
+\item{times}{Time point(s) specifying the prediction horizon}
 
 \item{xlab}{Label for x-axis}
 
@@ -29,12 +29,18 @@ plotROC(x, models, times, xlab = "1-Specificity", ylab = "Sensitivity", col,
 
 \item{pch}{point style}
 
-\item{legend}{logical. If \code{1L} draw a legend with the values of AUC.}
+\item{legend}{logical. If \code{1L} draw a legend with the values
+of AUC.}
+
+\item{auc.in.legend}{Logical. If \code{TRUE} add AUC to legend.}
+
+\item{brier.in.legend}{Logical. If \code{TRUE} add Brier score to
+legend.}
 
 \item{add}{logical. If \code{1L} add lines to an existing plot.}
 
 \item{...}{Used for additional control of the subroutines: plot,
-axis, lines, legend. See \code{\link{SmartControl}}.}
+axis, lines, legend, addtable2plot. See \code{\link{SmartControl}}.}
 }
 \description{
 Plot ROC curve
@@ -43,7 +49,6 @@ Plot ROC curve
 ## binary
 set.seed(18)
 library(randomForest)
-library(survival)
 bdl <- sampleData(40,outcome="binary")
 bdt <- sampleData(58,outcome="binary")
 bdl[,y:=factor(Y)]
@@ -51,10 +56,18 @@ bdt[,y:=factor(Y)]
 fb1 <- glm(y~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10,data=bdl,family="binomial")
 fb2 <- randomForest(y~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10,data=bdl)
 xb <- Score(list("glm"=fb1,"rf"=fb2),y~1,data=bdt,
-            plots="roc",metrics="auc")
-plotROC(xb)
+            plots="roc",metrics=c("auc","brier"))
+plotROC(xb,brier.in.legend=1L)
+
+# with cross-validation
+\dontrun{
+xb3 <- Score(list("glm"=fb1,"rf"=fb2),y~1,data=bdl,
+            plots="roc",B=3,split.method="bootcv",
+            metrics=c("auc"))
+}
 ## survival
 set.seed(18)
+library(survival)
 sdl <- sampleData(40,outcome="survival")
 sdt <- sampleData(58,outcome="survival")
 fs1 <- coxph(Surv(time,event)~X3+X5+X6+X7+X8+X10,data=sdl,x=TRUE)

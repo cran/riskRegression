@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Oct 23 2016 (08:53) 
 ## Version: 
-## last-updated: Jun 29 2017 (18:01) 
-##           By: Thomas Alexander Gerds
-##     Update #: 245
+## last-updated: apr 12 2018 (13:13) 
+##           By: Brice Ozenne
+##     Update #: 664
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -14,26 +14,38 @@
 #----------------------------------------------------------------------
 ## 
 ### Code:
-#' @title Compute the average treatment effect using CSC.
+#' @title Compute the average treatment effects via the g-formula
 #'
-#' @description Use the g-formula to estimate the average treatment effect
-#' @param object outcome model which describes how event risk depends on treatment and covariates.
-#' The object carry its own call and have a \code{predictRisk} method. See examples.
-#' @param data data set in which to evaluate risk predictions based on the outcome model
+#' @description Use the g-formula to estimate the average treatment
+#'     effect based on Cox regression with or without competing risks
+#' @param object outcome model which describes how event risk depends
+#'     on treatment and covariates.  The object carry its own call and
+#'     have a \code{predictRisk} method. See examples.
+#' @param data data set in which to evaluate risk predictions based on
+#'     the outcome model
+#' @param formula For analyses with time-dependent covariates, the response formula. See examples.
 #' @param treatment name of the treatment variable
-#' @param contrasts the levels of treatment variable to be compared
+#' @param contrasts the levels of the treatment variable to be
+#'     compared
 #' @param times time points at which to evaluate risks
 #' @param cause the cause of interest
-#' @param conf.level Numeric. Confidence level of the confidence intervals.
-#' @param se Logical. If \code{TRUE} add the standard errors and confidence intervals
-#' to the output.
+#' @param landmark for models with time-dependent covariates the landmark time(s) of evaluation.
+#'        In this case, argument \code{time} may only be one value and for the prediction of risks
+#'        it is assumed that that the covariates do not change between landmark and landmark+time.
+#' @param conf.level Numeric value between 0 and 1 (default is 0.05). Confidence level of the confidence intervals.
+#' @param se Logical. If \code{TRUE} compute standard errors and confidence intervals
+#' @param band Logical. If \code{TRUE} compute confidence bands across time points.
 #' @param B the number of bootstrap replications used to compute the
-#' confidence intervals. If it equals 0, then Wald-type confidence intervals are computed.
-#' They rely on the standard error estimated using the influence function of the estimator.
-#' @param band Logical. If \code{TRUE} add the confidence bands to the output.
-#' @param nSim.band the number of simulations used to compute the quantiles for the confidence bands.
+#'     confidence intervals. If it equals 0, then Wald-type confidence
+#'     intervals are computed.  They rely on the standard error
+#'     estimated using the influence function of the estimator.
+#' @param bootci.method Character. Method for constructing bootstrap confidence intervals.
+#' Either "perc" (the default), "norm", "basic", "stud", or "bca".
+#' Argument passed to \code{boot::boot.ci}.
+#' @param nsim.band the number of simulations used to compute the
+#'     quantiles for the confidence bands.
 #' @param seed An integer used to generate seeds for bootstrap and to
-#'     achieve reproducibility of the bootstrap confidence intervals.
+#'     achieve reproducible results.
 #' @param handler parallel handler for bootstrap. Either "mclapply" or
 #'     "foreach". If "foreach" use \code{doParallel} to create a cluster.
 #' @param mc.cores Passed to \code{parallel::mclapply} or
@@ -43,105 +55,262 @@
 #'     set.
 #' @param verbose Logical. If \code{TRUE} inform about estimated run
 #'     time.
-#' @param logTransform Should the confidence interval for the ratio be computed using a log-tranformation. Only active if Wald-type confidence intervals are computed.
 #' @param store.iid Implementation used to estimate the standard error. Can be \code{"full"} or \code{"minimal"}.
 #' \code{"minimal"} requires less memory but can only estimate the standard for the difference between treatment effects (and not for the ratio).
 #' @param ... passed to predictRisk
-#' @author Brice Ozenne \email{broz@@sund.ku.dk} and Thomas Alexander Gerds \email{tag@@biostat.ku.dk}
-#' @return A list with: point estimates, bootstrap quantile confidence
-#'     intervals model: the CSC model (optional)
+#'
+#' @author Brice Ozenne \email{broz@@sund.ku.dk} and Thomas Alexander
+#'     Gerds \email{tag@@biostat.ku.dk}
 #' 
-#' @details WARNING: the p.value and the confidence intervals for the ratio using Wald-type approximations are still experimental.
+#' @return An object of class \code{ate} containing:
+#' \itemize{
+#' \item meanRisk: a \code{data.table} object containing the ATE at each time and for each treatment level.
+#' \item riskComparison: a \code{data.table} object comparing the ATE between two treatment levels.
+#' \item treatment: the name of the treatment variable.
+#' \item contrasts: the levels of the treatment variable that were compared.
+#' \item times: the time points at which the ATE was computed.
+#' \item se: Logical. if \code{TRUE} compute the standard errors and confidence intervals of the ATE
+#' \item B: the number of bootstrap samples.
+#' \item band: Logical. If \code{TRUE} confidence bands are computed.
+#' \item nsim.band: the number of simulations used to compute the quantiles for the confidence bands.
+#' \item seeds: the seed used to generate the boostrap sample. Not used when the
+#' influence function is used to compute the standard errors of the ATE.
+#' \item conf.level: the confidence level of the confidence intervals.
+#' }
 #' 
 #' @examples 
 #' library(survival)
 #' library(rms)
 #' 
 #' set.seed(10)
-#' n <- 100
 #' 
-#' ## Cox model
-#' dtS <- sampleData(n,outcome="survival")
+#' #### Survival settings  ####
+#' #### ATE with Cox model ####
+#'
+#' ## generate data
+#' n <- 100
+#' dtS <- sampleData(n, outcome="survival")
 #' dtS$time <- round(dtS$time,1)
 #' dtS$X1 <- factor(rbinom(n, prob = c(0.3,0.4) , size = 2), labels = paste0("T",0:2))
 #'
-#' fit=cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
+#' ## estimate the Cox model
+#' fit <- cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
+#'
+#' ## compute the ATE at times 5, 6, 7, and 8 using X1 as the treatment variable
+#' \dontrun{
+#' ## only punctual estimate (argument se = FALSE)
+#' ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
+#'                se = FALSE)
+#'
+#' ## standard error / confidence intervals computed using the influence function
+#' ## (argument se = TRUE and B = 0)
+#' ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
+#'                se = TRUE, B = 0)
+#'
+#' ## bootstrap confidence intervals: studentized Wald type 
+#' ateFit1c <- ate(fit, data = dtS, treatment = "X1", times = 5,
+#'                seed=3,se = TRUE, B = 100)
+#' ## bootstrap confidence intervals: studentized Wald type 
+#' ateFit1d <- ate(fit, data = dtS, treatment = "X1", times = 5,
+#'                 seed=3,bootci.method="quantile",se = TRUE, B = 100)
+#'
+#' ## same as before with in addition the confidence bands for the ATE
+#' ## (argument band = TRUE)
+#' ateFit1c <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
+#'                se = TRUE, band = TRUE, B = 0)
+#' 
+#' ## standard error / confidence intervals computed using 100 boostrap samples
+#' ## (argument se = TRUE and B = 100) 
+#' ateFit1d <- ate(fit, data = dtS, treatment = "X1",
+#'                 times = 5:8, se = TRUE, B = 100)
+#' ## NOTE: for real applications 100 bootstrap samples is not enougth 
+#'
+#' ## same but using 2 cpus for generating and analyzing the boostrap samples
+#' ## (parallel computation, argument mc.cores = 2) 
+#' ateFit1e <- ate(fit, data = dtS, treatment = "X1",
+#'                 times = 5:8, se = TRUE, B = 100, mc.cores = 2)
+#' }
+#'
+#' #### Survival settings without censoring ####
+#' #### ATE with glm                        ####
+#' 
+#' ## generate data
+#' n <- 100
+#' dtS <- sampleData(n, outcome="survival")
+#' dtS[, event5 := eventtime<=5]
+#' dtS[, X2 := as.numeric(X2)]
+#' 
+#' ## estimate the Cox model
+#' fit <- glm(formula = event5 ~ X1+X2, data=dtS, family = "binomial")
+#' 
+#' ## compute the ATE at times 5 using X1 as the treatment variable
+#' ## only punctual estimate (argument se = FALSE)
+#' ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5,
+#'                se = FALSE)
+#' ateFit1a
 #'
 #' \dontrun{
-#' ateFit1 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-#'         times = 5:8, B = 1e3, y = TRUE,  mc.cores=1)
-#' 
-#' ateFit1 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-#'         times = 5:8, B = 1e1, y = TRUE,  mc.cores=1)
-#' ateFit2 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-#'         times = 5:8, B = 0, y = TRUE, band = TRUE, mc.cores=1)
+#' ## standard error / confidence intervals computed using the influence function
+#' ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5,
+#'                se = TRUE, B = 0)
+#' ateFit1b
 #'
-#' ateFit3 <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-#'            times = 5:8, B = 0, y = TRUE, band = TRUE, mc.cores=1,
-#'            store.iid = "minimal")
+#' ## standard error / confidence intervals computed using 100 boostrap samples
+#' ateFit1d <- ate(fit, data = dtS, treatment = "X1",
+#'                 times = 5, se = TRUE, B = 100)
+#' ateFit1d
+#' 
+#' ## using lava
+#' ateLava <- estimate(fit, function(p, data){
+#' a <- p["(Intercept)"] ; b <- p["X11"] ; c <- p["X2"] ;
+#' R.X11 <- expit(a + b + c * data[["X2"]])
+#' R.X10 <- expit(a + c * data[["X2"]])
+#' list(risk0=R.X10,risk1=R.X11,riskdiff=R.X10-R.X11)},
+#' average=TRUE)
+#' ateLava
 #' }
 #' 
-#' ## Competing risks: Cause specific Cox regression
+#' #### Competing risks settings               ####
+#' #### ATE with cause specific Cox regression ####
+#'
 #' \dontrun{
-#' set.seed(17)
-#' n=100
-#' dt <- sampleData(n,outcome="competing.risks")
+#' ## generate data
+#' n <- 500
+#' dt <- sampleData(n, outcome="competing.risks")
 #' dt$time <- round(dt$time,1)
 #' dt$X1 <- factor(rbinom(n, prob = c(0.2,0.3,0.2) , size = 3), labels = paste0("T",0:3))
-#' fitCR= CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
-#' ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-#'         times = 7, cause = 1, B = 2, mc.cores=1)
 #'
-#' atefit=ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-#'         times = 1:7, cause = 1, mc.cores=1, se = FALSE, band = FALSE)
-#'
+#' ## estimate cause specific Cox model
+#' fitCR <-  CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
 #' 
-#'  ate(fitCR, data = dt, treatment = "X1", contrasts = NULL,
-#'         times = 5:7, cause = 1, B = 0, se = TRUE, band = TRUE, mc.cores=1)
+#' ## compute the ATE at times 5, 6, 7, and 8 using X1 as the treatment variable
+#' ateFit2a <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+#'                se = FALSE)
+#'
+#' ## standard error / confidence intervals computed using the influence function
+#' ## (argument se = TRUE and B = 0)
+#' ateFit2b <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+#'                se = TRUE, B = 0)
+#'
+#' ## same as before with in addition the confidence bands for the ATE
+#' ## (argument band = TRUE)
+#' ateFit2c <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+#'                se = TRUE, band = TRUE, B = 0)
+#' 
+#' ## standard error / confidence intervals computed using 100 boostrap samples
+#' ## (argument se = TRUE and B = 100) 
+#' ateFit2d <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+#'                 se = TRUE, B = 100)
+#' ## NOTE: for real applications 100 bootstrap samples is not enougth 
+#'
+#' ## same but using 2 cpus for generating and analyzing the boostrap samples
+#' ## (parallel computation, argument mc.cores = 2) 
+#' ateFit2e <- ate(fitCR, data = dt, treatment = "X1", times = 5:8, cause = 1,
+#'                 se = TRUE, B = 100, mc.cores = 2)
 #' }
 #' 
+#' #### time-dependent covariates ###
+#' \dontrun{
+#' library(survival)
+#' fit <- coxph(Surv(time, status) ~ celltype+karno + age + trt, veteran)
+#' vet2 <- survSplit(Surv(time, status) ~., veteran,
+#'                        cut=c(60, 120), episode ="timegroup")
+#' fitTD <- coxph(Surv(tstart, time, status) ~ celltype+karno + age + trt,
+#'                data= vet2,x=1)
+#' set.seed(16)
+#' resVet <- ate(fitTD,formula=Hist(entry=tstart,time=time,event=status)~1,
+#'           data = vet2, treatment = "celltype", contrasts = NULL,
+#'         times=5,verbose=1,
+#'         landmark = c(0,30,60,90), cause = 1, B = 20, se = 1,
+#'         band = FALSE, mc.cores=1)
+#' resVet
+#' }
+#' 
+#' \dontrun{
+#' set.seed(137)
+#' d=sampleDataTD(127)
+#' library(survival)
+#' d[,status:=1*(event==1)]
+#' ## ignore competing risks
+#' cox1TD <- coxph(Surv(start,time, status,type="counting") ~ X3+X5+X6+X8, data=d)
+#' resTD1 <- ate(cox1TD,formula=Hist(entry=start,time=time,event=status)~1,
+#'         data = d, treatment = "X3", contrasts = NULL,
+#'         times=.5,verbose=1,
+#'         landmark = c(0,0.5,1), B = 20, se = 1,
+#'         band = FALSE, mc.cores=1)
+#' resTD1
+#' ## adjust for competing risks
+#' cscTD <- CSC(Hist(time=time, event=event,entry=start) ~ X3+X5+X6+X8, data=d)
+#' set.seed(16)
+#' resTD <- ate(cscTD,formula=Hist(entry=start,time=time,event=event)~1,
+#'         data = d, treatment = "X3", contrasts = NULL,
+#'         times=.5,verbose=1,
+#'         landmark = c(0,0.5,1), cause = 1, B = 20, se = 1,
+#'         band = FALSE, mc.cores=1)
+#' resTD
+#' }
 #' @export
 ate <- function(object,
                 data,
+                formula,
                 treatment,
                 contrasts = NULL,
                 times,
                 cause,
+                landmark,
                 conf.level = 0.95,
                 se = TRUE,
                 band = FALSE,
                 B = 0,
-                nSim.band = 1e3,
+                bootci.method = "perc",
+                nsim.band = ifelse(band,1e3,0),
                 seed,
-                handler=c("mclapply","foreach"),
+                handler = "foreach",
                 mc.cores = 1,
-                verbose=TRUE,
-                logTransform=FALSE,
-                store.iid="full",
+                verbose = TRUE,
+                store.iid = "full",
                 ...){
-    
-    meanRisk=Treatment=ratio=Treatment.A=Treatment.B=b <- NULL
-    .=.I <- NULL
-    diff.se=ratio.se=.GRP=lower=upper=diff.lower=diff.upper=diff.p.value=ratio.lower=ratio.upper=ratio.p.value <- NULL
-    lowerBand=upperBand=diffBand.lower=diffBand.upper=ratioBand.lower=ratioBand.upper <- NULL
-    
-    
-    # {{{ Prepare
+  
+  meanRisk=Treatment=ratio=Treatment.A=Treatment.B=b <- NULL
+  .=.I <- NULL
+  diff.se=ratio.se=.GRP=lower=upper=diff.lower=diff.upper=diff.p.value=ratio.lower=ratio.upper=ratio.p.value <- NULL
+   
+    handler <- match.arg(handler, c("foreach","mclapply","snow","parallel"))
+                                        # {{{ checking for time-dependent covariates (left-truncation)
+    TD <- switch(class(object)[[1]],"coxph"=(attr(object$y,"type")=="counting"),
+                 "CauseSpecificCox"=(attr(object$models[[1]]$y,"type")=="counting"),FALSE)
+    if (TD){
+        if (missing(formula))
+            stop("Need formula to do landmark analysis.")
+        if (missing(landmark))
+            stop("Need landmark time(s) to do landmark analysis.")
+        if(length(times)!=1){
+            stop("In settings with time-dependent covariates argument 'time' must be a single value, argument 'landmark' may be a vector of time points.")
+        }
+        Gformula <- Gformula_TD
+    }else{
+        landmark <- NULL
+        Gformula <- Gformula_TI
+    }
+                                        # }}}
+                                        # {{{ Prepare
     dots <- list(...)
-    
+    if(se==0 && B>0){
+        warning("argument 'se=0' means 'no standard errors' so number of bootstrap repetitions is forced to B=0.")
+    }
     if(band && B>0){
-        stop("the confidence bands cannot be computed when using the bootstrap approach \n",
-             "set argument \'band\' to FALSE to not compute the confidence bands \n",
-             "or set argument \'B\' to 0 to use the influence function instead of the bootstrap\n")
+        stop("Confidence bands cannot be computed when using the bootstrap approach \n",
+             "Either set argument \'band\' to FALSE to not compute the confidence bands \n",
+             "or set argument \'B\' to 0 to use the estimate of the asymptotic distribution instead of the bootstrap\n")
     }
     if(treatment %in% names(data) == FALSE){
         stop("The data set does not seem to have a variable ",treatment," (argument: treatment). \n")
     }
     test.CR <- !missing(cause) # test whether the argument cause has been specified, i.e. it is a competing risk model
     if(test.CR==FALSE){cause <- NA}
-
+  
     if(B==0 && (se || band)){
-        validClass <- c("CauseSpecificCox","coxph","cph","phreg")
+        validClass <- c("CauseSpecificCox","coxph","cph","phreg","glm")
         if(all(validClass %in% class(object) == FALSE)){
             stop("Standard error based on the influence function only implemented for \n",
                  paste(validClass, collapse = " ")," objects \n",
@@ -150,56 +319,31 @@ ate <- function(object,
     }
     data[[treatment]] <- factor(data[[treatment]])
   
-    if(is.null(contrasts)){
-        levels <- levels(data[[treatment]])
-        contrasts <- levels(data[[treatment]])
-        ## if (length(contrasts)>50) warning("Treatment variable has more than 50 levels.\nIf this is not a mistake,
-        ## you should use the argument `contrasts'.")
-    }else{levels <- contrasts}
-    n.contrasts <- length(contrasts)
-    n.times <- length(times)
-    n.obs <- NROW(data)
-
-    # }}}
-    
+  if(is.null(contrasts)){
+    levels <- levels(data[[treatment]])
+    contrasts <- levels(data[[treatment]])
+    ## if (length(contrasts)>50) warning("Treatment variable has more than 50 levels.\nIf this is not a mistake,
+    ## you should use the argument `contrasts'.")
+  }else{levels <- contrasts}
+  n.contrasts <- length(contrasts)
+  n.times <- length(times)
+  n.obs <- NROW(data)
+  
+  # }}}
+  
     # {{{ Checking the model
-
-    # for predictRisk S3-method
+  
+    ## for predictRisk S3-method
     allmethods <- utils::methods(predictRisk)
     candidateMethods <- paste("predictRisk",class(object),sep=".")
     if (all(match(candidateMethods,allmethods,nomatch=0)==0))
         stop(paste("Could not find predictRisk S3-method for ",class(object),collapse=" ,"),sep="")
-    # for compatibility with resampling
+    ## for compatibility with resampling
     if(is.null(object$call))
         stop(paste("The object does not contain its own call, which is needed to refit the model in the bootstrap loop."))
-
-  # }}}
-  
-    # {{{ calc G formula
-  Gformula <- function(object, data, treatment, contrasts, times, cause, ...){
-      meanRisk <- lapply(1:n.contrasts,function(i){
-          ## prediction for the hypothetical worlds in which every subject is treated with the same treatment
-          data.i <- data
-          data.i[[treatment]] <- factor(contrasts[i], levels = levels)
-          risk.i <- colMeans(do.call("predictRisk",args = list(object, newdata = data.i, times = times, cause = cause, ...)))
-      })
-      riskComparison <- data.table::rbindlist(lapply(1:(n.contrasts-1),function(i){
-          data.table::rbindlist(lapply(((i+1):n.contrasts),function(j){
-              ## compute differences between all pairs of treatments
-              data.table(Treatment.A=contrasts[[i]],
-                         Treatment.B=contrasts[[j]],
-                         time = times,
-                         diff=meanRisk[[i]]-meanRisk[[j]],
-                         ratio=meanRisk[[i]]/meanRisk[[j]])
-          }))}))
-      name.Treatment <- unlist(lapply(1:n.contrasts, function(c){rep(contrasts[c],length(meanRisk[[c]]))}))
-      out <- list(meanRisk = data.table(Treatment=name.Treatment, time = times, meanRisk=unlist(meanRisk)),
-                  riskComparison = riskComparison)
-      out
-  }
     # }}}
-    
-    # {{{ point estimate
+
+    # {{{ Point estimate
     estimateTime <- system.time(
         pointEstimate <- Gformula(object=object,
                                   data=data,
@@ -207,19 +351,29 @@ ate <- function(object,
                                   contrasts=contrasts,
                                   times=times,
                                   cause=cause,
-                                  dots))
+                                  landmark=landmark,
+                                  n.contrasts = n.contrasts,
+                                  levels = levels,
+                                  dots)
+    )
     # }}}
-    
-    # {{{ Confidence interval
+  
+    # {{{ Confidence interval    
 
-    ##### Confidence interval
     if(se || band){
-    
-    alpha <- 1-conf.level
+        if (TD){
+            key1 <- c("Treatment","landmark")
+            key2 <- c("Treatment.A","Treatment.B","landmark")
+        }
+        else{
+            key1 <- c("Treatment","time")
+            key2 <- c("Treatment.A","Treatment.B","time")
+        }
+        alpha <- 1-conf.level
     
         if(B>0){
-            # {{{ Bootstrap
-            if (verbose==TRUE)
+                                        # {{{ Bootstrap
+            if (verbose==TRUE){ ## display
                 message(paste0("Approximated bootstrap netto run time (without time for copying data to cores):\n",
                                round(estimateTime["user.self"],2),
                                " seconds times ",
@@ -228,367 +382,205 @@ ate <- function(object,
                                mc.cores,
                                " cores = ",
                                round(estimateTime["user.self"]*B/mc.cores,2)," seconds.\n"))
-            x.cores <- parallel::detectCores()
-            if(mc.cores > x.cores){
-                warning("Not enough available cores \n",
-                        "available: ",parallel::detectCores()," | requested: ",mc.cores,"\n")
-                mc.cores=x.cores
-            }
-            if (!missing(seed)) set.seed(seed)
-            bootseeds <- sample(1:1000000,size=B,replace=FALSE)
-            if (handler[[1]]=="foreach"){
-        
-                cl <- parallel::makeCluster(mc.cores)
-                doParallel::registerDoParallel(cl)
-                pp <- find(as.character(object$call[[1]]))
-                addPackage <- if(grep("package:",pp)){gsub("package:","",pp[grep("package:",pp)])}else{NULL}
-                boots <- foreach::`%dopar%`(foreach::foreach(b=1:B,.packages=c("riskRegression",addPackage),.export=NULL), {
-                    set.seed(bootseeds[[b]])
-                    dataBoot <- data[sample(1:n.obs, size = n.obs, replace = TRUE),]
-                    object$call$data <- dataBoot
-                    objectBoot <- try(eval(object$call),silent=TRUE)
-                    if ("try-error" %in% class(objectBoot)){
-                        stop(paste0("Failed to fit model ",class(object),ifelse(try(b>0,silent=TRUE),paste0(" in bootstrap step ",b,"."))))
-                    }
-                    tryCatch(Gformula(object=objectBoot,
-                                      data=dataBoot,
-                                      treatment=treatment,
-                                      contrasts=contrasts,
-                                      times=times,
-                                      cause=cause,
-                                      dots),
-                             error = function(x){return(NULL)})
-                })
-        
-                parallel::stopCluster(cl)
-        
-            } else {
-                if(Sys.info()["sysname"] == "Windows" && mc.cores>1){
-                    message("mclapply cannot perform parallel computations on Windows \n",
-                            "consider setting argument handler to \"foreach\" \n")
-                    mc.cores <- 1
-                }
-        
-                boots <- parallel::mclapply(1:B, function(b){
-                    set.seed(bootseeds[[b]])
-                    dataBoot <- data[sample(1:n.obs, size = n.obs, replace = TRUE),]
-                    object$call$data <- dataBoot
-                    objectBoot <- try(eval(object$call),silent=TRUE)
-                    if ("try-error" %in% class(objectBoot)){
-                        stop(paste0("Failed to fit model",ifelse(try(b>0,silent=TRUE),paste0(" in bootstrap step ",b,"."))))
-                    }
-                    tryCatch(Gformula(object=objectBoot,
-                                      data=dataBoot,
-                                      treatment=treatment,
-                                      contrasts=contrasts,
-                                      times=times,
-                                      cause=cause,
-                                      dots),
-                             error = function(x){return(NULL)})
-                }, mc.cores = mc.cores)
-            }
-      
-            ## gc()
-            meanRisksBoot <- data.table::rbindlist(lapply(boots,function(x)x$meanRisk))
-            riskComparisonsBoot <- data.table::rbindlist(lapply(boots,function(x)x$riskComparison))
-      
-            if(NROW(meanRisksBoot)==0){
-                stop("no successful bootstrap \n")
             }
 
-            mrisks <- meanRisksBoot[,data.table::data.table(meanRiskBoot=mean(meanRisk, na.rm = TRUE),
-                                                            lower=quantile(meanRisk,alpha/2, na.rm = TRUE),
-                                                            upper=quantile(meanRisk,1-(alpha/2), na.rm = TRUE),
-                                                            n.boot=sum(!is.na(meanRisk))),
-                                    keyby=c("Treatment","time")]
-      
-            crisks <- riskComparisonsBoot[,data.table::data.table(diffMeanBoot=mean(diff, na.rm = TRUE),
-                                                                  diff.lower=quantile(diff,alpha/2, na.rm = TRUE),
-                                                                  diff.upper=quantile(diff,1-(alpha/2), na.rm = TRUE),
-                                                                  diff.p.value=findP1(diff, alternative = "two.sided"),
-                                                                  ratioMeanBoot=mean(ratio, na.rm = TRUE),
-                                                                  ratio.lower=quantile(ratio,alpha/2, na.rm = TRUE),
-                                                                  ratio.upper=quantile(ratio,1-(alpha/2), na.rm = TRUE),
-                                                                  ratio.p.value=findP1(ratio-1, alternative = "two.sided"),
-                                                                  n.boot=sum(!is.na(diff))),
-                                          keyby=c("Treatment.A","Treatment.B","time")]
-            # }}}
+            vec.pointEstimate <- c(pointEstimate$meanRisk$meanRisk,
+                                   pointEstimate$riskComparison$diff,
+                                   pointEstimate$riskComparison$ratio)
+            names(vec.pointEstimate) <- c(pointEstimate$meanRisk[,paste0("meanRisk:",Treatment,":",time)],
+                                          pointEstimate$riskComparison[,paste0("compRisk:diff:",Treatment.A,":",Treatment.B,":",time)],
+                                          pointEstimate$riskComparison[,paste0("compRisk:ratio:",Treatment.A,":",Treatment.B,":",time)]
+                                          )
+
+            resBoot <- calcBootATE(object,
+                                   pointEstimate = vec.pointEstimate,
+                                   Gformula = Gformula,
+                                   data = data,
+                                   treatment = treatment,
+                                   contrasts = contrasts,
+                                   times = times,
+                                   cause = cause,
+                                   landmark = landmark,
+                                   n.contrasts = n.contrasts,
+                                   levels = levels,
+                                   dots = dots,
+                                   n.obs = n.obs,
+                                   handler = handler,
+                                   B = B,
+                                   seed = seed,
+                                   mc.cores = mc.cores,
+                                   verbose = verbose)
+
+            bootseeds <- resBoot$bootseeds
+            resBoot <- resBoot$boot
+            
+            suppressWarnings(
+                res.CIboot <- calcCIboot(boot = resBoot,
+                                         meanRisk = pointEstimate$meanRisk,
+                                         riskComparison = pointEstimate$riskComparison,
+                                         type = bootci.method,
+                                         conf = conf.level,
+                                         TD = TD)
+            )
+            mrisks <- res.CIboot$meanRisk
+            crisks <- res.CIboot$riskComparison
+            
+                                        # }}}
         } else {
-            
-            # {{{ Influence function and variance
-            average.iid <- store.iid=="minimal"
-            iid <- store.iid!="minimal"
-            
-            IFrisk <- lapply(1:n.contrasts,function(i){
-                #### influence function for the hypothetical worlds in which every subject is treated with the same treatment
-                data.i <- data
-                data.i[[treatment]] <- factor(contrasts[i], levels = levels)
-                ## influence function for the absolute risk
-                if ("CauseSpecificCox" %in% class(object)){
-                    pred.i <- do.call("predict",args = list(object,
-                                                            newdata = data.i,
-                                                            times = times,
-                                                            cause=cause,
-                                                            se=FALSE,
-                                                            iid=iid,
-                                                            keep.times=FALSE,
-                                                            logTransform=FALSE,
-                                                            store.iid=store.iid,
-                                                            average.iid=average.iid))
-                    risk.i <- pred.i$absRisk
-                    attr(risk.i,"iid") <- pred.i$absRisk.iid
-                } else{
-                    pred.i <- do.call("predictCox",args = list(object,
-                                                               newdata = data.i,
-                                                               times = times,
-                                                               se=FALSE,
-                                                               iid=iid,
-                                                               keep.times=FALSE,
-                                                               logTransform=FALSE,
-                                                               type="survival",
-                                                               store.iid=store.iid,
-                                                               average.iid=average.iid))
-                    risk.i <- 1-pred.i$survival
-                    attr(risk.i,"iid") <- pred.i$survival.iid
-                }
-                return(risk.i)
-            })
+                                        # {{{ compute standard error and quantiles via the influence function
 
-            ## influence function for the average treatment effect
-            iid.treatment <- array(NA, dim = c(n.contrasts, n.times, n.obs))
-            sdIF.treatment <- matrix(NA, nrow = n.contrasts, ncol = n.times)
-            for(iTreat in 1:n.contrasts){ # iTreat <- 1
-                if(average.iid){
-                     term1 <- t(attr(IFrisk[[iTreat]],"iid"))
-                }else{
-                    term1 <- apply(attr(IFrisk[[iTreat]],"iid"),2:3,mean)
-                }
-
-                term2 <- rowCenter_cpp(IFrisk[[iTreat]], center = pointEstimate$meanRisk[Treatment==contrasts[iTreat],meanRisk])
-
-                # we get n * IF instead of IF for the absolute risk. This is why the second term need to be rescaled
-                iid.treatment[iTreat,,] <- term1 + t(term2)/sqrt(n.obs)
-                sdIF.treatment[iTreat,] <- apply(iid.treatment[iTreat,,,drop=FALSE],2, ## MARGIN=2 and drop=FALSE to deal with the case of one timepoint
-                                                 function(x){sqrt(sum(x^2))}
-                                                 )
+            if(!is.null(landmark)){
+                stop("Calculation of the standard errors via the influence function not implemented for time dependent covariates \n")
             }
-
-            ## influence function for the difference/ratio in average treatment effect
-            nall.contrasts <- n.contrasts*(n.contrasts-1)/2
-            iid_diff.contrasts <- array(NA, dim = c(nall.contrasts, n.times, n.obs))
-            sdIF_diff.contrasts <- matrix(NA, nrow = nall.contrasts, ncol = n.times)
-            iid_ratio.contrasts <- array(NA, dim = c(nall.contrasts, n.times, n.obs))
-            sdIF_ratio.contrasts <- matrix(NA, nrow = nall.contrasts, ncol = n.times)
-            iiCon <- 0
-            sdIF.fct <- pointEstimate$riskComparison[,.(Treatment.A,Treatment.B,time)]
-            if(se){
-                sdIF.fct[,c("diff.se","ratio.se") := as.double(NA)]
-            }
-            if(band){
-                sdIF.fct[,c("diffBand.quantile","ratioBand.quantile") := as.double(NA)]
-            }
-            for(iCon in 1:((n.contrasts-1))){ # iCon <- 1
-                for(iCon2 in (iCon+1):n.contrasts){ # iCon2 <- 2
-                    ## compute differences between all pairs of treatments
-                    # IF had dimension n.predictions (row), n.times (columns), n.dataTrain (length)
-                    # apply 2 do for each time: extract the value of IF with n.predictions (row) and n.dataTrain (length)
-                    # colSums: compute the IF for the G formula for each observation in the training data set
-                    # sqrt(sum 2)) compute the variance of the estimator over the observations in the training data set
-                    iiCon <- iiCon + 1
-                    if(average.iid){
-                        term1 <- t(attr(IFrisk[[iCon]],"iid")-attr(IFrisk[[iCon2]],"iid"))
-                    }else{
-                        term1 <- apply(attr(IFrisk[[iCon]],"iid")-attr(IFrisk[[iCon2]],"iid"), 2:3, mean)
-                    }
-                    term2 <- rowCenter_cpp(IFrisk[[iCon]]-IFrisk[[iCon2]],
-                                           center = pointEstimate$riskComparison[Treatment.A==contrasts[iCon] & Treatment.B==contrasts[iCon2],diff])
-                    iid_diff.contrasts[iiCon,,] <- term1 + t(term2)/sqrt(n.obs)
-                    sdIF_diff.contrasts[iiCon,] <- apply(iid_diff.contrasts[iiCon,,,drop=FALSE],2,
-                                                         function(x){sqrt(sum(x^2))}
-                                                         )
-
-                    # IF(A/B) = IF(A)/B-IF(B)A/B^2
-                    if(average.iid){
-                        sdIF_ratio.contrasts[iiCon,] <- as.numeric(NA)
-                    }else{
-                        iidTempo1 <- aperm(attr(IFrisk[[iCon]],"iid"), c(3,2,1))
-                        term1 <- aperm(sliceScale_cpp(iidTempo1, IFrisk[[iCon2]]), c(3,2,1))
-
-                    iidTempo2 <- aperm(attr(IFrisk[[iCon2]],"iid"), c(3,2,1))
-                    term2 <- aperm(sliceMultiply_cpp(iidTempo2, IFrisk[[iCon]]/IFrisk[[iCon2]]^2), c(3,2,1))
-
-                    term3 <- rowCenter_cpp(IFrisk[[iCon]]/IFrisk[[iCon2]],
-                                           center = pointEstimate$riskComparison[Treatment.A==contrasts[iCon] & Treatment.B==contrasts[iCon2],ratio])
-                    
-                    iid_ratio.contrasts[iiCon,,] <- apply(term1 - term2, 2:3, mean) + t(term3)/sqrt(n.obs)
-                    sdIF_ratio.contrasts[iiCon,] <- apply(iid_ratio.contrasts[iiCon,,,drop=FALSE],2,
-                                                          function(x){sqrt(sum(x^2))}
-                                                          )
-                    }
-                    ## store the result
-                    index.contrasts <- sdIF.fct[, .I[Treatment.A==contrasts[[iCon]] & Treatment.B==contrasts[[iCon2]]]]
-                    if(se){
-                        sdIF.fct[index.contrasts,diff.se := sdIF_diff.contrasts[iiCon,]]  
-                        sdIF.fct[index.contrasts,ratio.se := sdIF_ratio.contrasts[iiCon,]]  
-                    }                   
-                }
-            }            
-            # }}}
-
-            # {{{ confidence bands
-            if(band){ # nSim.band <- 500
-
-                quantileIF <- confBandCox(iid = abind::abind(iid.treatment, iid_diff.contrasts, iid_ratio.contrasts, along = 1),
-                                          se = rbind(sdIF.treatment, sdIF_diff.contrasts, sdIF_ratio.contrasts),
-                                          times = times,
-                                          n.sim = nSim.band,
-                                          conf.level = conf.level)
-                
-                qIF.treatment <- quantileIF[1:n.contrasts]                
-                sdIF.fct[,c("diffBand.quantile","ratioBand.quantile") := .(quantileIF[n.contrasts+.GRP],
-                                                                           quantileIF[n.contrasts+nall.contrasts+.GRP]),
-                         by = c("Treatment.A","Treatment.B")]
-
-                
-            }
-            # }}}
+            resSE <- calcSeATE(object,
+                               data = data,
+                               times = times,
+                               cause = cause,
+                               treatment = treatment,
+                               contrasts = contrasts,
+                               n.contrasts = n.contrasts,
+                               levels = levels,
+                               n.times = n.times,
+                               n.obs = n.obs,
+                               pointEstimate = pointEstimate,
+                               alpha = alpha, conf.level = conf.level,
+                               se = se,
+                               band = band, nsim.band = nsim.band,
+                               store.iid = store.iid)
             
-            # {{{ compute confidence intervals and bands
-
-            crisks <- sdIF.fct[,.(Treatment.A,Treatment.B,time)]
-            mrisks <- data.table::data.table(Treatment = pointEstimate$meanRisk$Treatment,
-                                             time = times)
-            
-            mrisks[, meanRisk := pointEstimate$meanRisk$meanRisk]
-            if(logTransform){
-                stop("not implemented yet \n")
-                ##     ratio.lower <- exp(log(pointEstimate$riskComparison$ratio) + qnorm(alpha/2) * sdIF.fct$ratio)
-                ##     ratio.upper <- exp(log(pointEstimate$riskComparison$ratio) + qnorm(1-alpha/2) * sdIF.fct$ratio)
-                ##     ratio.p.value <- 2*(1-pnorm(abs(log(pointEstimate$riskComparison$ratio)), sd = sdIF.fct$ratio))
-            }else{
-                if(se){                    
-                    mrisks[, lower := meanRisk + qnorm(alpha/2) * sdIF.treatment[.GRP,], by = "Treatment"]
-                    mrisks[, upper := meanRisk + qnorm(1-alpha/2) * sdIF.treatment[.GRP,], by = "Treatment"]
-
-                    crisks[, diff.lower := pointEstimate$riskComparison$diff - qnorm(1-alpha/2) * sdIF.fct$diff.se]
-                    crisks[, diff.upper := pointEstimate$riskComparison$diff + qnorm(1-alpha/2) * sdIF.fct$diff.se]
-                    crisks[, diff.p.value := 2*(1-pnorm(abs(pointEstimate$riskComparison$diff), sd = sdIF.fct$diff.se))]
-
-                    crisks[, ratio.lower := pointEstimate$riskComparison$ratio - qnorm(1-alpha/2) * sdIF.fct$ratio.se]
-                    crisks[, ratio.upper := pointEstimate$riskComparison$ratio + qnorm(1-alpha/2) * sdIF.fct$ratio.se]
-                    crisks[, ratio.p.value := 2*(1-pnorm(abs(pointEstimate$riskComparison$ratio-1), sd = sdIF.fct$ratio.se))]                    
-                }
-                if(band){
-                    mrisks[, lowerBand := meanRisk - qIF.treatment[.GRP] * sdIF.treatment[.GRP,], by = "Treatment"]
-                    mrisks[, upperBand := meanRisk + qIF.treatment[.GRP] * sdIF.treatment[.GRP,], by = "Treatment"]
-
-                    crisks[, diffBand.lower := pointEstimate$riskComparison$diff - sdIF.fct$diffBand.quantile * sdIF.fct$diff.se]
-                    crisks[, diffBand.upper := pointEstimate$riskComparison$diff + sdIF.fct$diffBand.quantile * sdIF.fct$diff.se]
-
-                    crisks[, ratioBand.lower := pointEstimate$riskComparison$ratio - sdIF.fct$ratioBand.quantile * sdIF.fct$ratio.se]
-                    crisks[, ratioBand.upper := pointEstimate$riskComparison$ratio + sdIF.fct$ratioBand.quantile * sdIF.fct$ratio.se]
-                }
-            }            
-            mrisks[, meanRisk := NULL]
-
-            # }}}
-            
+            ## merge with pointEstimate
+            mrisks <- merge(pointEstimate$meanRisk,resSE$mrisks,by=key1)
+            crisks <- merge(pointEstimate$riskComparison,resSE$crisks,by=key2)            
             bootseeds <- NULL
-        }} else{
-      
-             mrisks <- data.table::data.table(Treatment = pointEstimate$meanRisk$Treatment,
-                                              time = times)
-             crisks <- data.table::data.table(Treatment.A = pointEstimate$riskComparison$Treatment.A,
-                                              Treatment.B = pointEstimate$riskComparison$Treatment.B,
-                                              time = times)
-             bootseeds <- NULL
+            resBoot <- NULL
 
-             # }}}
-         }
+                                        # }}}
+        }
+    } else{
+        mrisks <- pointEstimate$meanRisk
+        crisks <- pointEstimate$riskComparison        
+        bootseeds <- NULL
+        resBoot <- NULL
 
-    ## merge with pointEstimate
-    mrisks <- merge(pointEstimate$meanRisk,mrisks,by=c("Treatment","time"))
-    crisks <- merge(pointEstimate$riskComparison,crisks,by=c("Treatment.A","Treatment.B","time"))
+                                        # }}}
+    }
+                                        # {{{ output object
     out <- list(meanRisk=mrisks,
                 riskComparison=crisks,
                 treatment=treatment,
                 contrasts=contrasts,
                 times=times,
                 se = se,
-                n.bootstrap=B,
+                TD = TD,
+                B = B,
                 band = band,
-                nSim.band = nSim.band,
+                nsim.band = nsim.band,
+                boot = resBoot,
+                bootci.method = bootci.method,
                 seeds=bootseeds,
-                conf.level=conf.level,
-                logTransform = logTransform)
+                conf.level=conf.level)
   
     class(out) <- c("ate",class(object))
-    out
+    return(out)
+                                        # }}}
+
 }
 
+# {{{ Gformula: time dependent covariates
+Gformula_TD <- function(object,
+                        data,
+                        treatment,
+                        contrasts,
+                        times,
+                        landmark,
+                        cause,
+                        n.contrasts,
+                        levels,
+                        ...){
 
-#' @title Compute the p.value from the distribution under H1
-#' @description Compute the p.value from the distribution under H1
-#' 
-#' @param x the sample
-#' @param alternative a character string specifying the alternative hypothesis, must be one of "two.sided" (default), "greater" or "less"
-#' 
-#' @examples 
-#' set.seed(10)
-#' 
-#' # no effect
-#' x <- rnorm(1e3) 
-#' riskRegression:::findP1(x, alternative = "two.sided")
-#' riskRegression:::findP1(x, alternative = "greater")
-#' riskRegression:::findP1(x, alternative = "less")
-#' 
-#' # effect
-#' x <- rnorm(1e3, mean = 1) 
-#' riskRegression:::findP1(x, alternative = "two.sided")
-#' riskRegression:::findP1(x, alternative = "greater") # pnorm(q = 0, mean = 1)
-#' riskRegression:::findP1(x, alternative = "less")
-#' 
-#' x <- rnorm(1e3, mean = -1) 
-#' riskRegression:::findP1(x, alternative = "two.sided") 
-#' riskRegression:::findP1(x, alternative = "greater")
-#' riskRegression:::findP1(x, alternative = "less") # pnorm(q = 0, mean = -1)
-#' 
-findP1 <- function(x, alternative = "two.sided"){ 
-  
-  x <- na.omit(x)
-  if(length(x)==0 || length(x) < 10){
-    return(as.numeric(NA))
-  }else if(all(x>0)){
-    p.value <- switch(alternative,
-                      "two.sided" = 0,
-                      "less" = 1,
-                      "greater" = 1)
-  } else if(all(x<0)){
-    p.value <- switch(alternative,
-                      "two.sided" = 0,
-                      "less" = 0,
-                      "greater" = 1)
-  }else if(all(x==0)){
-    p.value <- switch(alternative,
-                      "two.sided" = 0,
-                      "less" = 0,
-                      "greater" = 0)
-  }else{
-    fn <- function(p){abs(quantile(x, probs = p))}
+    Treatment <- Treatment.B <- meanRisk <- ratio <- NULL ## [:forCRANcheck:]
     
-    optimum <- optim(fn = fn, par = 0.5, lower = 0, upper = 1, method = "L-BFGS-B")
-    
-    
-    p.value <- switch(alternative,
-                      "two.sided" = if(optimum$par < 0.5){2*optimum$par}else{2*(1-optimum$par)},
-                      "less" = 1-optimum$par,
-                      "greater" = optimum$par)
-    
-  }
-  
-  return(p.value)
+    response <- eval(formula[[2]],envir=data)
+    time <- response[,"time"]
+    entry <- response[,"entry"]
+    if(class(object)[[1]]=="coxph"){
+        riskhandler <- "predictRisk.coxphTD"
+    }else{
+        riskhandler <- "predictRisk.CSCTD"
+    }
+    ## prediction for the hypothetical worlds in which every subject is treated with the same treatment
+    dt.meanRisk <- data.table::rbindlist(lapply(1:n.contrasts,function(i){
+        data.i <- data
+        data.i[[treatment]] <- factor(contrasts[i], levels = levels)
+        data.table::rbindlist(lapply(landmark,function(lm){
+            atrisk <- (entry <= lm & time >= lm)
+            risk.i <- colMeans(do.call(riskhandler,
+                                       args = list(object,
+                                                   newdata = data.i[atrisk,],
+                                                   times = times,
+                                                   cause = cause,
+                                                   landmark=lm,
+                                                   ...)))
+            data.table::data.table(Treatment=contrasts[[i]],time=times,landmark=lm,meanRisk=risk.i)
+        }))
+    }))
+    riskComparison <- data.table::rbindlist(lapply(1:(n.contrasts-1),function(i){
+        data.table::rbindlist(lapply(((i+1):n.contrasts),function(j){
+            ## compute differences between all pairs of treatments
+            RC <- dt.meanRisk[Treatment==contrasts[[i]]]
+            setnames(RC,"Treatment","Treatment.A")
+            RC[,Treatment.B:=contrasts[[j]]]
+            RC[,diff:=meanRisk-dt.meanRisk[Treatment==contrasts[[j]],meanRisk]]
+            RC[,ratio:=meanRisk/dt.meanRisk[Treatment==contrasts[[j]],meanRisk]]
+            RC[,meanRisk:=NULL]
+            RC[]
+        }))}))
+    out <- list(meanRisk = dt.meanRisk,
+                riskComparison = riskComparison)
+    return(out)
 }
 
+# }}}
+
+# {{{ Gformula: time independent covariates
+Gformula_TI <- function(object,
+                        data,
+                        treatment,
+                        contrasts,
+                        times,
+                        landmark,
+                        cause,
+                        n.contrasts,
+                        levels,
+                        ...){
+
+    meanRisk <- lapply(1:n.contrasts,function(i){ ## i <- 1
+        ## prediction for the hypothetical worlds in which every subject is treated with the same treatment
+        data.i <- data
+        data.i[[treatment]] <- factor(contrasts[i], levels = levels)
+        allrisks <- do.call("predictRisk",
+                            args = list(object, newdata = data.i, times = times, cause = cause,...))
+        if(!is.matrix(allrisks)){allrisks <- cbind(allrisks)} 
+        risk.i <- colMeans(allrisks)
+        risk.i
+    })
+    riskComparison <- data.table::rbindlist(lapply(1:(n.contrasts-1),function(i){ ## i <- 1
+        data.table::rbindlist(lapply(((i+1):n.contrasts),function(j){ ## j <- 2
+            ## compute differences between all pairs of treatments
+            data.table(Treatment.A=contrasts[[i]],
+                       Treatment.B=contrasts[[j]],
+                       time = times,
+                       diff=meanRisk[[i]]-meanRisk[[j]],
+                       ratio=meanRisk[[i]]/meanRisk[[j]])
+        }))}))
+    name.Treatment <- unlist(lapply(1:n.contrasts, function(c){rep(contrasts[c],length(meanRisk[[c]]))}))
+    out <- list(meanRisk = data.table(Treatment=name.Treatment, time = times, meanRisk=unlist(meanRisk)),
+                riskComparison = riskComparison)    
+    return(out)            
+}
+# }}}
+
+            
 
 #----------------------------------------------------------------------
 ### ate.R ends here

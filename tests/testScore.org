@@ -16,10 +16,10 @@ test.d <- sampleData(M,outcome="binary")
 f1 <- glm(Y~X1+X2+X6+X8,data=train.d,family=binomial)
 f2 <- lrm(Y~X1+X2+X9,data=train.d)
 f3 <- lrm(Y~X6,data=train.d)
-a <- Score(list(f1,f2,f3),data=test.d,formula=Y~1,metrics=c("Brier","auc"),conf.int=FALSE,nullModel=FALSE)
+a <- Score(list(f1,f2,f3),data=test.d,formula=Y~1,metrics=c("Brier","auc"),conf.int=FALSE,null.model=FALSE)
 library(ModelGood)
-## v <- Brier(list(f1,f2,f3),data=test.d,splitMethod="none",verbose=FALSE)
-v <- Roc(list(f1,f2,f3),data=test.d,splitMethod="none",verbose=FALSE)
+## v <- Brier(list(f1,f2,f3),data=test.d,split.method="none",verbose=FALSE)
+v <- Roc(list(f1,f2,f3),data=test.d,split.method="none",verbose=FALSE)
 x <- cbind(Auc=unlist(v$Auc),Brier=unlist(v$Brier))
 y <- cbind(Auc=a$AUC$score[,AUC],Brier=a$Brier$score[,Brier])
 rownames(y) <- rownames(x)
@@ -47,7 +47,7 @@ test.d <- sampleData(M,outcome="binary")
 f1 <- glm(Y~X1+X2+X6+X8,data=train.d,family=binomial)
 f2 <- lrm(Y~X1+X2+X9,data=train.d)
 f3 <- lrm(Y~X6,data=train.d)
-Source(riskRegression);testr <- Score(list(f1,f2,f3),data=test.d,formula=Y~1,metrics=c("Brier","auc"),test=FALSE,nullModel=FALSE)
+Source(riskRegression);testr <- Score(list(f1,f2,f3),data=test.d,formula=Y~1,metrics=c("Brier","auc"),test=FALSE,null.model=FALSE)
 plot.score.ROC(testr)
 #+END_SRC
 
@@ -76,11 +76,11 @@ test.d$time <- round(test.d$time,1)
 f12 <- coxph(Surv(time,status)~X1+X2,data=train.d)
 test.d$X2 <- abs(round(test.d$X2,2))
 ## Source(riskRegression)
-Rscoretime <- system.time(Rscore <- Score(list(test.d$X2),data=test.d,formula=Surv(time,status)~1,times=5,metrics=c("AUC"),nullModel=FALSE,test=TRUE))
+Rscoretime <- system.time(Rscore <- Score(list(test.d$X2),data=test.d,formula=Surv(time,status)~1,times=5,metrics=c("AUC"),null.model=FALSE,test=TRUE))
 tROCtime <- system.time(tROC <- with(test.d,timeROC(T=time,delta=status,marker=X2,times=5,cause=1,iid=TRUE)))
 print(rbind(c(Package="timeROC",timeROC.AUC=tROC$AUC[[2]],
               timeROC.seAUC=tROC$inference$vect_sd_1[[2]]),
-            c(Package="riskRegression",Rscore$AUC$score[,c("AUC"=AUC,"se.AUC"=se.AUC)])))
+            c(Package="riskRegression",Rscore$AUC$score[,c("AUC"=AUC,"se"=se)])))
 cbind(timeROC.time=tROCtime[[1]],Rscore.time=Rscoretime[[1]])
 expect_equal(tROC$AUC[[2]],Rscore$AUC$score[,AUC])
 #+END_SRC   
@@ -106,11 +106,11 @@ test.d <- SimSurv(M)
 f12 <- coxph(Surv(time,status)~X1+X2,data=train.d)
 test.d$X2 <- abs(round(test.d$X2,2))
 ## Source(riskRegression)
-Rscoretime <- system.time(Rscore <- Score(list(test.d$X2),data=test.d,formula=Surv(time,status)~1,times=5,metrics=c("AUC"),nullModel=FALSE,test=TRUE))
+Rscoretime <- system.time(Rscore <- Score(list(test.d$X2),data=test.d,formula=Surv(time,status)~1,times=5,metrics=c("AUC"),null.model=FALSE,test=TRUE))
 tROCtime <- system.time(tROC <- with(test.d,timeROC(T=time,delta=status,marker=X2,times=5,cause=1,iid=TRUE)))
 print(rbind(c(Package="timeROC",timeROC.AUC=tROC$AUC[[2]],
               timeROC.seAUC=tROC$inference$vect_sd_1[[2]]),
-            c(Package="riskRegression",Rscore$AUC$score[,c("AUC"=AUC,"se.AUC"=se.AUC)])))
+            c(Package="riskRegression",Rscore$AUC$score[,c("AUC"=AUC,"se"=se)])))
 cbind(timeROC.time=tROCtime[[1]],Rscore.time=Rscoretime[[1]])
 #+END_SRC   
 
@@ -177,7 +177,7 @@ print(b)
     a <- cph(Surv(time,status!=0)~age+edema+sex+log(bili),data=pbc,surv=TRUE)
     b <- cph(Surv(time,status!=0)~age+edema+sex+log(bili)+log(protime)+log(albumin),data=pbc,surv=TRUE)
     set.seed(17)
-    sc <- Score(list(a,b),data=pbc,formula=Surv(time,status!=1)~1,times=c(1000),metrics=c("brier","auc"),nullModel=FALSE,splitMethod="bootcv",B=2)
+    sc <- Score(list(a,b),data=pbc,formula=Surv(time,status!=1)~1,times=c(1000),metrics=c("brier","auc"),null.model=FALSE,split.method="bootcv",B=2)
     r <- pec(list(a,b),data=pbc,start=NULL,Surv(time,status!=1)~1,times=c(100,500,1000),exact=FALSE)
     u <- with(pbc,timeROC(T=time,delta=status!=0,marker=1-predictSurvProb(a,times=1500,newdata=pbc),cause=1,times=1500,iid=TRUE))
     u2 <- with(pbc,timeROC(T=time,delta=status!=0,marker=1-predictSurvProb(b,times=1500,newdata=pbc),cause=1,times=c(1500)))
@@ -202,7 +202,7 @@ ttt <- seq(1,10)
 set.seed(899)
 train.d <- SimSurv(300)
 train.d <- train.d[order(train.d$time,-train.d$status),]
-testauc <- Score(list(train.d$X2),data=train.d,times=ttt,metrics="AUC",censModel="marginal",splitMethod="none",formula=Surv(time,status)~1)
+testauc <- Score(list(train.d$X2),data=train.d,times=ttt,metrics="AUC",cens.model="marginal",split.method="none",formula=Surv(time,status)~1)
 troc <- with(train.d,timeROC(T=time,delta=status,marker=X2,cause=1,times=ttt))
 plot(troc$times,troc$AUC,lwd=7,col=2,xlim=range(troc$times),ylim=c(0.5,1),type="b")
 plot(testauc$AUC,add=TRUE,models="numeric",type="b")
@@ -232,7 +232,7 @@ mini <- mini[order(mini$time),]
 ## [2,]  0.8 -0.2 -0.2 -0.2 -0.2
 ## [3,]  0.8 -0.2 -0.2 -0.2 -0.2
 ## [4,]  0.8 -0.2 -0.2 -0.2 -0.2
-a1 <- Score(list(mini$X1),data=mini,formula=Surv(time,status)~1,times=c(3.4),metrics="AUC",compare=FALSE,nullModel=FALSE)
+a1 <- Score(list(mini$X1),data=mini,formula=Surv(time,status)~1,times=c(3.4),metrics="AUC",compare=FALSE,null.model=FALSE)
 b1 <- with(mini,timeROC(T=time,delta=status,marker=X1,cause=1,times=3.4,iid=TRUE))
 #+END_SRC
 
@@ -244,8 +244,8 @@ library(timeROC)
 library(riskRegression)
 mini <- data.frame(time=c(4,2,3,3,7),status=c(1,0,1,1,1),X2=c(-.1,0.1,-0.03,0.04,0.3),X1=c(7,1,9,4,2))
 mini <- mini[order(mini$time),]
-a <- Score(list(mini$X1,mini$X2),data=mini,formula=Surv(time,status)~1,times=c(3.4),metrics="AUC",compare=FALSE,nullModel=FALSE)
-a1 <- Score(list(mini$X1),data=mini,formula=Surv(time,status)~1,times=c(3.4),metrics="AUC",compare=FALSE,nullModel=FALSE)
+a <- Score(list(mini$X1,mini$X2),data=mini,formula=Surv(time,status)~1,times=c(3.4),metrics="AUC",compare=FALSE,null.model=FALSE)
+a1 <- Score(list(mini$X1),data=mini,formula=Surv(time,status)~1,times=c(3.4),metrics="AUC",compare=FALSE,null.model=FALSE)
 b1 <- with(mini,timeROC(T=time,delta=status,marker=X1,cause=1,times=3.4,iid=TRUE))
 ##       Cases Survivors Censored AUC (%)    se
 ## t=3.4     2         2        1      75 27.95
@@ -253,7 +253,7 @@ b2 <- with(mini,timeROC(T=time,delta=status,marker=X2,cause=1,times=3.4,iid=TRUE
 ##       Cases Survivors Censored AUC (%)    se
 ## t=3.4     2         2        1      50 39.53
 cbind(AUC.Score=a$AUC$score[,AUC],AUC.timeROC=c(b1$AUC[2],b2$AUC[2]))
-cbind(seAUC.Score=a$AUC$score[,se.AUC],seAUC.timeROC=c(b1$inference$vect_sd_1[[2]],b2$inference$vect_sd_1[[2]]))
+cbind(seAUC.Score=a$AUC$score[,se],seAUC.timeROC=c(b1$inference$vect_sd_1[[2]],b2$inference$vect_sd_1[[2]]))
 #+END_SRC
 
 #+BEGIN_SRC R  :results output raw drawer  :exports results  :session *R* :cache yes 
@@ -271,9 +271,9 @@ library(rms)
 f2 <- cph(Surv(time,status)~X2,data=train.d,surv=TRUE)
 f2a <- cph(Surv(time,status)~X2+X1,data=train.d,surv=TRUE)
 ttt <- c(2,4,8)
-cv.brier <- Score(list(f2a),data=train.d,times=ttt,metrics="Brier",censModel="marginal",splitMethod="bootcv",B=3,formula=Surv(time,status)~1)
-cv.auc <- Score(list(f2a),data=train.d,times=ttt,metrics="AUC",censModel="marginal",splitMethod="bootcv",B=3,formula=Surv(time,status)~1)
-cv.both <- Score(list(f2,f2a),data=train.d,times=ttt,metrics=c("auC","briEr"),censModel="marginal",splitMethod="bootcv",B=3,formula=Surv(time,status)~1)
+cv.brier <- Score(list(f2a),data=train.d,times=ttt,metrics="Brier",cens.model="marginal",split.method="bootcv",B=3,formula=Surv(time,status)~1)
+cv.auc <- Score(list(f2a),data=train.d,times=ttt,metrics="AUC",cens.model="marginal",split.method="bootcv",B=3,formula=Surv(time,status)~1)
+cv.both <- Score(list(f2,f2a),data=train.d,times=ttt,metrics=c("auC","briEr"),cens.model="marginal",split.method="bootcv",B=3,formula=Surv(time,status)~1)
 plot(cv.both$AUC,type="b")
 #+END_SRC
 
@@ -304,7 +304,7 @@ c1 <- coxph(Surv(time,event)~X1+X2+X6+X8,data=trainS,x=TRUE)
 c2 <- coxph(Surv(time,event)~X1+X2+X9,data=trainS,x=TRUE)
 c3 <- coxph(Surv(time,event)~X6,data=trainS,x=TRUE)
 ## plot(prodlim(Hist(time,event)~1,data=testS))
-ascore <- Score(list(c1,c2,c3),data=testS,formula=Surv(time,event)~1,times=3:18,metrics=c("AUC"),nullModel=FALSE,dolist=NULL,summary=NULL,plots=NULL)
+ascore <- Score(list(c1,c2,c3),data=testS,formula=Surv(time,event)~1,times=3:18,metrics=c("AUC"),null.model=FALSE,dolist=NULL,summary=NULL,plots=NULL)
 plotAUC(ascore)
 #+END_SRC   
 
@@ -316,10 +316,10 @@ library(timeROC)
 library(rms)
 ex <- data.frame(time=c(1.3,2.5,1,4,2,3,6,7,9),status=c(1,1,2,1,0,2,1,2,1),X1=c(5,7,8,1,1,3,4,3,0),X2=c(2,9,8,1,1,3,4,3,0))
 with(ex,timeROC(T=time,delta=status,marker=X1,cause=1,times=4.1,iid=TRUE))
-Score(list(ex$X1),data=ex,formula=Hist(time,status)~1,times=4.1,metrics="aUc",nullModel=FALSE)
+Score(list(ex$X1),data=ex,formula=Hist(time,status)~1,times=4.1,metrics="aUc",null.model=FALSE)
 ## 
 with(ex,timeROC(T=time,delta=status,marker=X2,cause=1,times=4.1,iid=TRUE))
-Score(list(ex$X2),data=ex,formula=Hist(time,status)~1,times=4.1,metrics="aUc",nullModel=FALSE)
+Score(list(ex$X2),data=ex,formula=Hist(time,status)~1,times=4.1,metrics="aUc",null.model=FALSE)
 #+END_SRC
 
 ** Brier score competing risks: Paul's Webappendix vs Score
@@ -343,8 +343,8 @@ d$X2 <- round(d$X2)
 f <- CSC(Hist(time,event)~X1+X2,data=train)
 p <- predictEventProb(f,newdata=d,times=5,cause=1)
 system.time(a <- BS(timepoints=5,d$time,d$event,p,cause=1,compute.iid=TRUE))
-system.time(b <- Score(list(p),formula=Hist(time,event)~1,times=5,data=d,metrics="Brier",nullModel=FALSE))
-print(cbind(TROC=c(BS=a$BS,se=a$sd),Score=b$Brier$score[,c(Brier,se.Brier)]))
+system.time(b <- Score(list(p),formula=Hist(time,event)~1,times=5,data=d,metrics="Brier",null.model=FALSE))
+print(cbind(TROC=c(BS=a$BS,se=a$sd),Score=b$Brier$score[,c(Brier,se)]))
 #+END_SRC
 
 ** Retrospective risk assessment: risk difference conditional on outcome
@@ -362,5 +362,5 @@ library(riskRegression)
 f12 <- CSC(Hist(time,event)~X1+X2,data=train)
 f1 <- CSC(Hist(time,event)~X1,data=train)
 Source(riskRegression,silent=TRUE)
-u <- Score(list(f12,f1),formula=Hist(time,event)~1,summary="riskQuantile",nullModel=FALSE,data=train)
+u <- Score(list(f12,f1),formula=Hist(time,event)~1,summary="riskQuantile",null.model=FALSE,data=train)
 #+END_SRC   

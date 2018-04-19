@@ -102,14 +102,20 @@ FGR <- function(formula,data,cause=1,y=TRUE,...){
     # {{{ cause of interest
     states <- prodlim::getStates(response)
     if (missing(cause)){
-        cause <- 1
+        cause <- states[1]
         message("Argument cause missing. Analyse cause: ",states[1])
     }
     else{
-        if ((foundCause <- match(as.character(cause),states,nomatch=0))==0)
-            stop(paste("Requested cause: ",cause," Available causes: ", states))
-        else
-            cause <- foundCause
+        ## cause <- prodlim::checkCauses(cause,response)
+        cause <- unique(cause)
+        if (!is.character(cause)) cause <- as.character(cause)
+        if (!(all(cause %in% states))){
+            stop(paste0("Cannot find requested cause(s) in object\n\n",
+                        "Requested cause(s): ",
+                        paste0(cause,collapse=", "),
+                        "\n Available causes: ",
+                        states,"\n"))
+        }
     }  
     # }}}
     # {{{ covariate design matrices
@@ -121,7 +127,7 @@ FGR <- function(formula,data,cause=1,y=TRUE,...){
                  fstatus=event,
                  cov1=cov1,
                  cov2=cov2,
-                 failcode=cause,
+                 failcode=match(cause,states,nomatch=NA),
                  cencode=length(states)+1,...)
     
     if (!is.null(cov2) && NCOL(cov2)>0){

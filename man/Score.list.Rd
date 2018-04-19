@@ -6,11 +6,13 @@
 \title{Score risk predictions}
 \usage{
 \method{Score}{list}(object, formula, data, metrics = c("auc", "brier"),
-  summary = NULL, plots = NULL, cause = 1, times, landmarks,
-  useEventTimes = FALSE, nullModel = TRUE, conf.int = 0.95,
+  summary = NULL, plots = NULL, cause, times, landmarks,
+  use.event.times = FALSE, null.model = TRUE, se.fit = TRUE,
+  conservative = FALSE, multi.split.test = FALSE, conf.int = 0.95,
   contrasts = TRUE, probs = c(0, 0.25, 0.5, 0.75, 1),
-  censMethod = "outside.ipcw", censModel = "cox", splitMethod, B, M, seed,
-  trainseeds, keep, ...)
+  cens.method = "outside.ipcw", cens.model = "cox", split.method, B, M,
+  seed, trainseeds, keep, predictRisk.args, debug = 0L, useEventTimes,
+  nullModel, censMethod, censModel, splitMethod, ...)
 }
 \arguments{
 \item{object}{List of risk predictions (see details and examples).}
@@ -32,7 +34,10 @@ statistics to apply to the predicted risks. The only choice is
 predicted risks conditional on the outcome (at the time-point).
 Set to \code{NULL} to avoid estimation of retrospective risk quantiles.}
 
-\item{plots}{Character vector specifying which plots to prepare. Choices}
+\item{plots}{Character vector specifying for which plots to put data into the result.
+Currently implemented are \code{"ROC"}, \code{"Calibration"} and \code{"boxplot"}.
+In addition, one can plot AUC and Brier score as function of time as soon as
+\code{times} has at least two different values.}
 
 \item{cause}{Event of interest. Used for binary outcome \code{Y}
 to specify that risks are risks of the event \code{Y=event}
@@ -47,13 +52,22 @@ the prediction performance is estimated at many prediction horizons.}
 
 \item{landmarks}{Not yet implemented.}
 
-\item{useEventTimes}{If \code{TRUE} merge all unique event times with 
+\item{use.event.times}{If \code{TRUE} merge all unique event times with 
 the vector given by argument \code{times}.}
 
-\item{nullModel}{If \code{TRUE} fit a risk prediction model which ignores
+\item{null.model}{If \code{TRUE} fit a risk prediction model which ignores
     the covariates and predicts the same value for all subjects. The model is fitted using \code{data}
 and the left hand side of \code{formula}. For binary outcome this is just the empirical prevalence. For (right censored) time to event outcome, the null models are
 equal to the Kaplan-Meier estimator (no competing risks) and the Aalen-Johansen estimator (with competing risks).}
+
+\item{se.fit}{Logical or \code{0} or \code{1}. If \code{FALSE} or \code{0} do not calculate standard errors.}
+
+\item{conservative}{Logical, only relevant in right censored data. If \code{TRUE} ignore
+variability of the estimate of the inverse probability of censoring weights when calculating standard
+errors for prediction performance parameters. This can potentially reduce computation time and memory usage
+at a usually very small expense of a slightly higher standard error.}
+
+\item{multi.split.test}{Logical or \code{0} or \code{1}. If \code{FALSE} or \code{0} do not calculate multi-split tests. This argument is ignored when \code{split.method} is "none".}
 
 \item{conf.int}{Either logical or a numeric value between 0 and 1. In right censored data,
 confidence intervals are based on Blanche et al (see references). Setting \code{FALSE} prevents the 
@@ -65,7 +79,7 @@ level of significance is 13 percent. So, do not set it to 0.87.}
  should be contrasted with respect to their prediction performance.
 If \code{TRUE} do all possible comparisons. For
   example, when \code{object} is a list with two risk prediction models and
-  \code{nullModel=TRUE} setting \code{TRUE} is equivalent to
+  \code{null.model=TRUE} setting \code{TRUE} is equivalent to
   \code{list(c(0,1,2),c(1,2))} where \code{c(0,1,2)} codes for the
   two comparisons: 1 vs 0 and 2 vs 0 (positive integers refer to
   elements of \code{object}, 0 refers to the benchmark null
@@ -78,20 +92,20 @@ If \code{TRUE} do all possible comparisons. For
 \item{probs}{Quantiles for retrospective summary statistics of the
 predicted risks. This affects the result of the function \code{boxplot.Score}.}
 
-\item{censMethod}{Method for dealing with right censored
+\item{cens.method}{Method for dealing with right censored
     data. Either \code{"outside.ipcw"} or \code{"inside.ipcw"}. \code{"outside.ipcw"} 
     Here IPCW refers to inverse probability of censoring weights. The attributes inside and outside are
-     only relevant for cross-validation (\code{splitMethod}) where the inside method computes the IPCW model
+     only relevant for cross-validation (\code{split.method}) where the inside method computes the IPCW model
 in the the loop in each of the current test data sets whereas the outside method computes the IPCW model only once in the full data.
     Also, jackknife pseudo-values may become another option for all statistics. Right now
     they are only used for calibration curves.}
 
-\item{censModel}{Model for estimating inverse probability of
+\item{cens.model}{Model for estimating inverse probability of
     censored weights. Implemented are the Kaplan-Meier method (\code{"km"}) and
 Cox regression (\code{"cox"}) both applied to the censored times. If the right hand side of \code{formula} does not specify covariates,
 the Kaplan-Meier method is used even if this argument is set to \code{"cox"}.}
 
-\item{splitMethod}{Method for cross-validation. Right now the only choice is \code{bootcv} in which case bootstrap learning sets
+\item{split.method}{Method for cross-validation. Right now the only choice is \code{bootcv} in which case bootstrap learning sets
 are drawn with our without replacement (argument \code{M}) from \code{data}. The data not included in the current bootstrap learning
 set are used as validation set to compute the prediction performance.}
 
@@ -105,9 +119,34 @@ randomly splitting (bootstrapping) the data during cross-validation.}
 
 \item{trainseeds}{Seeds for training models during cross-validation.}
 
-\item{keep}{provide about additional output}
+\item{keep}{list of characters (not case sensitive) which determines additional output.
+\code{"residuals"} provides Brier score residuals and
+\code{"splitindex"} provides sampling index used to split the data into training and validation sets.
+\code{"vcov"} provides the variance-covariance matrix of the estimated parameters.}
 
-\item{...}{Not used}
+\item{predictRisk.args}{A list of argument-lists to control how risks are predicted. 
+ The names of the lists should be the S3-classes of the \code{object}.
+ The argument-lists are then passed on to the S3-class specific predictRisk method. 
+ For example, if your object contains one or several random forest model fitted with the function randomForestSRC::rfsrc then you can
+ specify additional arguments for the function riskRegression::predictRisk.rfsrc which will pass
+ these on to the function randomForestSRC::predict.rfsrc. A specific example in this case would be
+ \code{list(rfsrc=list(na.action="na.impute"))}.
+
+ A more flexible approach is to write a new predictRisk S3-method. See Details.}
+
+\item{debug}{Logical. If \code{TRUE} indicate landmark in progress of the program.}
+
+\item{useEventTimes}{obsolete.}
+
+\item{nullModel}{obsolete.}
+
+\item{censMethod}{obsolete.}
+
+\item{censModel}{obsolete.}
+
+\item{splitMethod}{obsolete.}
+
+\item{...}{Named list containging additional arguments that are passed on to the \code{predictRisk} methods corresponding to object. See examples.}
 }
 \value{
 List with scores and assessments of contrasts, i.e.,
@@ -129,9 +168,77 @@ external validation data or in the learning data using bootstrap
 cross-validation. The function optionally provides results for plotting (time-point specific)
 ROC curves, for (time-point specific) calibration curves and for (time-point specific) retrospective boxplots.
 
-For uncensored binary outcome the Delong-Delong test is used to contrast AUC of rival models in all other cases
+For uncensored binary outcome the Delong-Delong test is used to contrast AUC of rival models.
+In right censored survival data (with and without competing risks) 
 the p-values correspond to Wald tests based on standard errors obtained with an estimate of the influence function
-as described in detain in the appendix of Blanche et al. (2015).
+as described in detail in the appendix of Blanche et al. (2015).
+
+
+This function works with one or multiple models that predict the risk of an event R(t|X) for a subject
+characterized by predictors X at time t.
+With binary endpoints (outcome 0/1 without time component) the risk is simply R(X).
+In case of a survival object
+without competing risks the function still works with predicted event probabilities, i.e., R(t|X)=1-S(t|X) where
+S(t|X) is the predicted survival chance for subject X at time t.
+
+The already existing predictRisk methods (see methods(predictRisk)) may not cover all models and methods
+for predicting risks. But users can quickly extend the package as explained in detail in Mogensen et al. (2012) for
+the predecessors \code{pec::predictSurvProb} and \code{pec::predictEventProb} which have been unified as
+\code{riskRegression::predictRisk}.
+
+Bootstrap Crossvalidation (see also Gerds & Schumacher 2007 and Mogensen et al. 2012)
+
+B=10, M (not specified or M=NROW(data))
+Training of each of the models in each of 10 bootstrap data sets (learning data sets).
+Learning data sets are obtained by sampling \code{NROW(data)} subjects of the data set
+with replacement. There are roughly \code{.632*NROW(data)} subjects in the learning data (inbag)
+and \code{.368*NROW(data)} subjects not in the validation data sets (out-of-bag).
+
+These are used to estimate the scores: AUC, Brier, etc. Reported are averages across the 10 splits.
+
+## Bootstrap with replacement
+\code{
+set.seed(13)
+N=17
+data = data.frame(id=1:N, y=rbinom(N,1,.3),x=rnorm(N))
+boot.index = sample(1:N,size=N,replace=TRUE)
+boot.index
+inbag = 1:N %in% boot.index
+outofbag = !inbag 
+learn.data = data[inbag]
+val.data = data[outofbag]
+riskRegression:::getSplitMethod("bootcv",B=10,N=17)$index
+}
+NOTE: the number .632 is the expected probability to draw one subject (for example subject 1) with
+   replacement from the data, which does not depend on the sample size:
+\code{B=10000}
+\code{N=137}
+\code{mean(sapply(1:B, function(b){match(1,sample(1:N,size=N,replace=TRUE),nomatch=0)}))}
+\code{N=30}
+\code{mean(sapply(1:B, function(b){match(1,sample(1:N,size=N,replace=TRUE),nomatch=0)}))}
+\code{N=300}
+\code{mean(sapply(1:B, function(b){match(1,sample(1:N,size=N,replace=TRUE),nomatch=0)}))}
+
+
+## Bootstrap without replacement (training size set to be 70 percent of data)
+B=10, M=.7
+
+Training of each of the models in each of 10 bootstrap data sets (learning data sets).
+Learning data sets are obtained by sampling \code{round(.8*NROW(data))} subjects of the data set
+without replacement. There are \code{NROW(data)-round(.8*NROW(data))} subjects not in the learning data sets.
+These are used to estimate the scores: AUC, Brier, etc. Reported are averages across the 10 splits.
+\code{
+set.seed(13)
+N=17
+data = data.frame(id=1:N, y=rbinom(N,1,.3),x=rnorm(N))
+boot.index = sample(1:N,size=M,replace=FALSE)
+boot.index
+inbag = 1:N %in% boot.index
+outofbag = !inbag 
+learn.data = data[inbag]
+val.data = data[outofbag]
+riskRegression:::getSplitMethod("bootcv",B=10,N=17,M=.7)$index
+}
 }
 \examples{
 # binary outcome
@@ -140,25 +247,34 @@ set.seed(18)
 learndat <- sampleData(48,outcome="binary")
 testdat <- sampleData(40,outcome="binary")
 
-# score logistic regression models
+## score logistic regression models
 lr1 = glm(Y~X1+X2+X7+X9,data=learndat,family=binomial)
-lr2 = glm(Y~X3+X5+X6,data=learndat,family=binomial)
-Score(list("LR(X1+X2+X7+X9)"=lr1,"LR(X3+X5+X6)"=lr2),formula=Y~1,data=testdat)
+lr2 = glm(Y~X3+X5,data=learndat,family=binomial)
+Score(list("LR(X1+X2+X7+X9)"=lr1,"LR(X3+X5)"=lr2),formula=Y~1,data=testdat)
 
+## ROC curve and calibration plot 
 xb=Score(list("LR(X1+X2+X7+X9)"=lr1,"LR(X3+X5+X6)"=lr2),formula=Y~1,
         data=testdat,plots=c("calibration","ROC"))
 plotROC(xb)
 plotCalibration(xb)
 
-# compute AUC for a list of continuous markers
+## compute AUC for a list of continuous markers
 markers = as.list(testdat[,.(X6,X7,X8,X9,X10)])
-u=Score(markers,formula=Y~1,data=testdat,metrics=c("auc"))
+Score(markers,formula=Y~1,data=testdat,metrics=c("auc"))
 
 # cross-validation
 \dontrun{
+learndat=sampleData(400,outcome="binary")
 lr1a = glm(Y~X6,data=learndat,family=binomial)
 lr2a = glm(Y~X7+X8+X9,data=learndat,family=binomial)
-Score(list("LR1"=lr1a,"LR2"=lr2a),formula=Y~1,data=learndat,splitMethod="bootcv",B=3)
+## bootstrap cross-validation
+x1=Score(list("LR1"=lr1a,"LR2"=lr2a),formula=Y~1,data=learndat,split.method="bootcv",B=100)
+x1
+## leave-one-out and leave-pair-out bootstrap
+x2=Score(list("LR1"=lr1a,"LR2"=lr2a),formula=Y~1,data=learndat,
+              split.method="loob",
+              B=100,plots="calibration")
+x2
 }
 # survival outcome
 
@@ -187,16 +303,25 @@ Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
 
 # crossvalidation models in traindata
 \dontrun{
-Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+library(survival)
+set.seed(18)
+trainSurv <- sampleData(400,outcome="survival")
+cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=trainSurv, y=TRUE, x = TRUE)
+cox2 = coxph(Surv(time,event)~X3+X5+X6,data=trainSurv, y=TRUE, x = TRUE)
+x1 = Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
       formula=Surv(time,event)~1,data=trainSurv,conf.int=TRUE,times=c(5,8),
-      splitMethod="bootcv",B=3)
+      split.method="loob",B=100,plots="calibration")
+
+x2= Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+      formula=Surv(time,event)~1,data=trainSurv,conf.int=TRUE,times=c(5,8),
+      split.method="bootcv",B=100)
 }
 
 # restrict number of comparisons
 \dontrun{
 Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
       formula=Surv(time,event)~1,data=trainSurv,contrasts=TRUE,
-nullModel=FALSE,conf.int=TRUE,times=c(5,8),splitMethod="bootcv",B=3)
+null.model=FALSE,conf.int=TRUE,times=c(5,8),split.method="bootcv",B=3)
 }
 # competing risks outcome
 set.seed(18)
@@ -212,8 +337,22 @@ fgr1 = FGR(Hist(time,event)~X1+X2+X7+X9,data=trainCR,cause=1)
 fgr2 = FGR(Hist(time,event)~X3+X5+X6,data=trainCR,cause=1)
 Score(list("CSC(X1+X2+X7+X9)"=csc1,"CSC(X3+X5+X6)"=csc2,
            "FGR(X1+X2+X7+X9)"=fgr1,"FGR(X3+X5+X6)"=fgr2),
-      formula=Hist(time,event)~1,data=testCR,se.fit=TRUE,times=c(5,8))
+      formula=Hist(time,event)~1,data=testCR,se.fit=1L,times=c(5,8))
 
+\dontrun{
+# reproduce some results of Table IV of Blanche et al. Stat Med 2013
+data(Paquid)
+ResPaquid <- Score(list("DSST"=-Paquid$DSST,"MMSE"=-Paquid$MMSE),
+                   formula=Hist(time,status)~1,
+                   data=Paquid,
+                   null.model = FALSE,
+                   conf.int=TRUE,
+                   metrics=c("auc"),
+                   times=c(3,5,10),
+                   plots="ROC")
+ResPaquid
+plotROC(ResPaquid,time=5)
+}
 }
 \references{
 Ulla B. Mogensen, Hemant Ishwaran, Thomas A. Gerds (2012).
@@ -222,14 +361,14 @@ Curves. Journal of Statistical Software, 50(11), 1-23. URL
 http://www.jstatsoft.org/v50/i11/.
 
 Paul Blanche, Cecile Proust-Lima, Lucie Loubere, Claudine Berr, Jean- Francois Dartigues, and
-Helene Jacqmin-Gadda. Quantifying and comparing
-dynamic predictive accuracy of joint models for longitudinal marker and
-time-to-event in presence of censoring and competing risks. Biometrics, 71
-(1):102--113, 2015.
+Helene Jacqmin-Gadda. Quantifying and comparing dynamic predictive accuracy of joint models
+for longitudinal marker and time-to-event in presence of censoring and competing risks.
+Biometrics, 71 (1):102--113, 2015.
+
 P. Blanche, J-F Dartigues, and H. Jacqmin-Gadda. Estimating and comparing
-    time-dependent areas under receiver operating characteristic curves for
-    censored event times with competing risks. Statistics in Medicine, 32(30):
-    5381--5397, 2013.
+time-dependent areas under receiver operating characteristic curves for
+censored event times with competing risks. Statistics in Medicine,
+32(30):5381--5397, 2013.
 
 E. Graf et al.  (1999), Assessment and comparison of prognostic
 classification schemes for survival data. Statistics in Medicine, vol 18,
