@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: apr 11 2018 (17:05) 
 ## Version: 
-## Last-Updated: apr 12 2018 (13:02) 
-##           By: Brice Ozenne
-##     Update #: 45
+## Last-Updated: Sep 11 2018 (12:26) 
+##           By: Thomas Alexander Gerds
+##     Update #: 69
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -17,21 +17,22 @@
 
 # {{{ calcBootATE
 ## generate a boot object for the ate function that will be used to compute CI and p.values
-calcBootATE <- function(object, pointEstimate, Gformula, data, 
+calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
                         treatment, contrasts, times, cause, landmark, n.contrasts, levels,
                         dots, n.obs,
-                        handler, B, seed, mc.cores,
+                        handler, B, seed, mc.cores, cl,
                         verbose){
-
     name.estimate <- names(pointEstimate)
-    
+    no.cl <- is.null(cl)
+    if( (no.cl == FALSE) && (mc.cores == 1) ){ ## i.e. the user has not initialized the number of cores
+        mc.cores <- length(cl)
+    }
     ## cores
     x.cores <- parallel::detectCores()
     if(mc.cores > x.cores){
         warning("Not enough available cores \n","available: ",parallel::detectCores()," | requested: ",mc.cores,"\n")
         mc.cores <- x.cores
     }
-
     ## package to be exported to cluster
     if(handler %in% c("snow","foreach") ){
         pp <- find(as.character(object$call[[1]]))
@@ -39,16 +40,14 @@ calcBootATE <- function(object, pointEstimate, Gformula, data,
         addPackage <- if(length(index.package)>0){gsub("package:","",pp[index.package])}else{NULL}
         addPackage <- unique(c("riskRegression","parallel","survival",addPackage))
     }
-    
     ## seed
     if (!missing(seed)) set.seed(seed)
     bootseeds <- sample(1:1000000,size=B,replace=FALSE)
-
     ## bootstrap
     if(handler[[1]] %in% c("snow","parallel")) {
                                         # {{{ use boot package
 
-        if(handler=="snow"){
+        if(handler=="snow" && no.cl){
             ## initialize CPU
             cl <- parallel::makeCluster(mc.cores)
             ## load packages
@@ -61,10 +60,7 @@ calcBootATE <- function(object, pointEstimate, Gformula, data,
             ## set seeds
             bootseeds <- sum(bootseeds)
             set.seed(bootseeds)
-            ##
-            cl <- NULL
         }
-
         ## run bootstrap
         boot.object <- boot::boot(data = data, R = B, statistic = function(data, index, ...){
             dataBoot <- data[index]
@@ -73,42 +69,46 @@ calcBootATE <- function(object, pointEstimate, Gformula, data,
             if ("try-error" %in% class(objectBoot)){
                 stop(paste0("Failed to fit model ",class(object)))
             }
-            iBoot <- tryCatch(Gformula(object=objectBoot,
-                                       data=dataBoot,
-                                       treatment=treatment,
-                                       contrasts=contrasts,
-                                       times=times,
-                                       cause=cause,
-                                       landmark=landmark,
-                                       n.contrasts = n.contrasts,
-                                       levels = levels,
-                                       dots),
+            Gargs <- list(object=objectBoot,
+                          data=dataBoot,
+                          treatment=treatment,
+                          contrasts=contrasts,
+                          times=times,
+                          cause=cause,
+                          landmark=landmark,
+                          n.contrasts = n.contrasts,
+                          levels = levels,
+                          dots)
+            if (TD) Gargs <- c(Gargs,list(formula=formula))
+            iBoot <- tryCatch(do.call(Gformula, Gargs),
                               error = function(x){return(NULL)})
-
-                if(is.null(iBoot)){ ## error handling
-                    out <- setNames(rep(NA, length(name.estimate), name.estimate))
-                }else{
-                    out <- setNames(c(iBoot$meanRisk$meanRisk,
-                                      iBoot$riskComparison$diff,
-                                      iBoot$riskComparison$ratio), name.estimate)
-                }
-                return(out)
-            }, sim = "ordinary", stpe = "indices", strata = rep(1, n.obs),
-            parallel = handler[[1]], ncpus = mc.cores, cl = cl)
-
-                                        # }}}
+            if(is.null(iBoot)){ ## error handling
+                out <- setNames(rep(NA, length(name.estimate), name.estimate))
+            }else{
+                out <- setNames(c(iBoot$meanRisk$meanRisk,
+                                  iBoot$riskComparison$diff,
+                                  iBoot$riskComparison$ratio), name.estimate)
+            }
+            return(out)
+        }, sim = "ordinary", stpe = "indices", strata = rep(1, n.obs),
+        parallel = handler[[1]], ncpus = mc.cores, cl = cl)
+        # }}}
     }else {
         if (handler[[1]]=="foreach" && mc.cores>1){
-                                        # {{{ foreach
-            if(verbose){
-                cl <- parallel::makeCluster(mc.cores, outfile = "")
-                pb <- txtProgressBar(max = B, style = 3)          
-            }else{
-                cl <- parallel::makeCluster(mc.cores)
-            }
+            # {{{ foreach
+            if(no.cl){
+                if(verbose){
+                    cl <- parallel::makeCluster(mc.cores, outfile = "")
+                }else{
+                    cl <- parallel::makeCluster(mc.cores)
+                }                
+            }           
             doParallel::registerDoParallel(cl)
+            
+            if(verbose){pb <- txtProgressBar(max = B, style = 3)}
+
             b <- NULL ## [:forCRANcheck:] foreach
-            boots <- foreach::`%dopar%`(foreach::foreach(b = 1:B, .packages = addPackage, .export = NULL), {
+            boots <- foreach::`%dopar%`(foreach::foreach(b = 1:B, .packages = addPackage, .export = c("formula")), { ## b <- 1
                 set.seed(bootseeds[[b]])
                 if(verbose){setTxtProgressBar(pb, b)}
                 dataBoot <- data[sample(1:n.obs, size = n.obs, replace = TRUE),]
@@ -117,20 +117,23 @@ calcBootATE <- function(object, pointEstimate, Gformula, data,
                 if ("try-error" %in% class(objectBoot)){
                     stop(paste0("Failed to fit model ",class(object),ifelse(try(b>0,silent=TRUE),paste0(" in bootstrap step ",b,"."))))
                 }
-                tryCatch(Gformula(object=objectBoot,
-                                  data=dataBoot,
-                                  treatment=treatment,
-                                  contrasts=contrasts,
-                                  times=times,
-                                  cause=cause,
-                                  landmark=landmark,
-                                  n.contrasts = n.contrasts,
-                                  levels = levels,
-                                  dots),
-                         error = function(x){return(NULL)})
+                Gargs <- list(object=objectBoot,
+                              data=dataBoot,
+                              treatment=treatment,
+                              contrasts=contrasts,
+                              times=times,
+                              cause=cause,
+                              landmark=landmark,
+                              n.contrasts = n.contrasts,
+                              levels = levels,
+                              dots)
+                if (TD) Gargs <- c(Gargs,list(formula=formula))
+                iBoot <- tryCatch(do.call(Gformula, Gargs),
+                                  error = function(x){return(NULL)})
+                ## error = function(x){return(x)})
             })
             if(verbose){close(pb)}
-            parallel::stopCluster(cl)
+            if(no.cl){parallel::stopCluster(cl)}
                                         # }}}
         }else{
                                         # {{{ mcapply
@@ -147,22 +150,24 @@ calcBootATE <- function(object, pointEstimate, Gformula, data,
                 if ("try-error" %in% class(objectBoot)){
                     stop(paste0("Failed to fit model",ifelse(try(b>0,silent=TRUE),paste0(" in bootstrap step ",b,"."))))
                 }
-                tryCatch(Gformula(object=objectBoot,
-                                  data=dataBoot,
-                                  treatment=treatment,
-                                  contrasts=contrasts,
-                                  times=times,
-                                  cause=cause,
-                                  landmark=landmark,
-                                  n.contrasts = n.contrasts,
-                                  levels = levels,
-                                  dots),
-                         error = function(x){return(NULL)})
+
+                Gargs <- list(object=objectBoot,
+                              data=dataBoot,
+                              treatment=treatment,
+                              contrasts=contrasts,
+                              times=times,
+                              cause=cause,
+                              landmark=landmark,
+                              n.contrasts = n.contrasts,
+                              levels = levels,
+                              dots)
+                if (TD) Gargs <- c(Gargs,list(formula=formula))
+                iBoot <- tryCatch(do.call(Gformula, Gargs),
+                                  error = function(x){return(NULL)})
             }, mc.cores = mc.cores)
-                                        # }}}
+            # }}}
         }
-    
-                                        # {{{ convert to boot object
+        # {{{ convert to boot object
         M.bootEstimate <- do.call(rbind,lapply(boots,function(iBoot){
             c(iBoot$meanRisk$meanRisk, iBoot$riskComparison$diff, iBoot$riskComparison$ratio)
         }))
@@ -170,7 +175,6 @@ calcBootATE <- function(object, pointEstimate, Gformula, data,
             stop("Error in all bootstrap samples.")
         }
         colnames(M.bootEstimate) <- name.estimate
-
         boot.object <- list(t0 = pointEstimate,
                             t = M.bootEstimate,
                             R = B,
@@ -188,143 +192,14 @@ calcBootATE <- function(object, pointEstimate, Gformula, data,
                             mle = NULL ## only used when sim is "parametric" (from doc of boot::boot)
                             )
         class(boot.object) <- "boot"
-                                        # }}}
+        # }}}
     }
-
     return(list(boot = boot.object,
                 bootseeds = bootseeds))
     
 }
                                         # }}}
 
-# {{{ calcCIboot
-calcCIboot <- function(boot, meanRisk, riskComparison, type, conf, TD){
-
-    type <- tolower(type) ## convert to lower case
-    name.estimate <- names(boot$t0)
-    n.estimate <- length(name.estimate)
-    index <- 1:n.estimate
-
-    slot.boot.ci <- switch(type,
-                           "norm" = "normal",
-                           "basic" = "basic",
-                           "stud" = "student",
-                           "perc" = "percent",
-                           "bca" = "bca")
-    index.lowerCI <- switch(type,
-                            "norm" = 2,
-                            "basic" = 4,
-                            "stud" = 4,
-                            "perc" = 4,
-                            "bca" = 4)
-    index.upperCI <- switch(type,
-                            "norm" = 3,
-                            "basic" = 5,
-                            "stud" = 5,
-                            "perc" = 5,
-                            "bca" = 5)
-
-    test.NA <- !is.na(boot$t)
-    test.Inf <- !is.infinite(boot$t)
-    n.boot <- colSums(test.NA*test.Inf)
-
-    ## boot estimate
-    boot.estimate <- apply(boot$t, 2, mean, na.rm = TRUE)
-
-    ## standard error
-    boot.se <- sqrt(apply(boot$t, 2, var, na.rm = TRUE))
-
-    ## confidence interval
-    alpha <- 1-conf
-    ls.CI <- lapply(index, function(iP){ # iP <- 1
-        if(n.boot[iP]==0){
-            return(c(lower = NA, upper = NA))
-        }else if(type == "Wald"){
-            return(c(lower = as.double(boot$t0[iP] + qnorm(alpha/2) * boot.se[iP]),
-                     upper = as.double(boot$t0[iP] - qnorm(alpha/2) * boot.se[iP])
-                     ))
-        }else if(type == "quantile"){
-            return(c(lower = as.double(quantile(boot$t[,iP], probs = alpha/2, na.rm = TRUE)),
-                     upper = as.double(quantile(boot$t[,iP], probs = 1-(alpha/2), na.rm = TRUE))
-                     ))
-        }else{
-            out <- boot::boot.ci(boot,
-                                 conf = conf,
-                                 type = type,
-                                 index = iP)[[slot.boot.ci]][index.lowerCI:index.upperCI]
-            return(setNames(out,c("lower","upper")))
-        }    
-    })
-    boot.CI <- do.call(rbind,ls.CI)
-        
-    ## pvalue
-    null <- setNames(rep(0,length(name.estimate)),name.estimate)
-    null[grep("^compRisk:ratio", name.estimate)] <- 1
-
-    boot.p <- sapply(index, function(iP){ # iP <- 1
-        if(n.boot[iP]==0){
-            return(NA)
-        }else{
-            ## search confidence level such that quantile of CI which is close to 0
-            p.value <- boot2pvalue(x = boot$t[,iP],
-                                   null = null[iP],
-                                   estimate = boot$t0[iP],
-                                   alternative = "two.sided",
-                                   FUN.ci = function(p.value, sign.estimate, ...){ ## p.value <- 0.4
-                                       side.CI <- c(index.lowerCI,index.upperCI)[2-sign.estimate]
-                                       boot::boot.ci(boot,
-                                                     conf = 1-p.value,
-                                                     type = type,
-                                                     index = iP)[[slot.boot.ci]][side.CI]
-                                   })
-            return(p.value)
-        }
-    })
-        
-    ## merge
-    index.mrisk <- grep("^meanRisk:",name.estimate)
-    boot.mrisks <- cbind(meanRisk[,.SD, .SDcols = c("Treatment","time")],
-                         meanRiskBoot = boot.estimate[index.mrisk],
-                         se = boot.se[index.mrisk],
-                         lower = boot.CI[index.mrisk,"lower"],
-                         upper = boot.CI[index.mrisk,"upper"],
-                         n.boot = n.boot[index.mrisk])
-
-    index.crisk.diff <- grep("^compRisk:diff:",name.estimate)
-    index.crisk.ratio <- grep("^compRisk:ratio:",name.estimate)
-    boot.crisks <- cbind(riskComparison[, .SD, .SDcols = c("Treatment.A","Treatment.B","time")],
-                         diffMeanBoot = boot.estimate[index.crisk.diff],
-                         diff.se = boot.se[index.crisk.diff],
-                         diff.lower = boot.CI[index.crisk.diff,"lower"],
-                         diff.upper = boot.CI[index.crisk.diff,"upper"],
-                         diff.p.value = boot.p[index.crisk.diff],
-                         diff.n.boot = n.boot[index.crisk.diff],
-                         ratioMeanBoot = boot.estimate[index.crisk.ratio],
-                         ratio.se = boot.se[index.crisk.ratio],
-                         ratio.lower = boot.CI[index.crisk.ratio,"lower"],
-                         ratio.upper = boot.CI[index.crisk.ratio,"upper"],
-                         ratio.p.value = boot.p[index.crisk.ratio],
-                         ratio.n.boot = n.boot[index.crisk.ratio]
-                         )
-                                    
-    if (TD){
-        key1 <- c("Treatment","landmark")
-        key2 <- c("Treatment.A","Treatment.B","landmark")
-    }
-    else{
-        key1 <- c("Treatment","time")
-        key2 <- c("Treatment.A","Treatment.B","time")
-    }
-
-
-    ## export
-    return(list(meanRisk = merge(meanRisk[,.SD,.SDcols = c("Treatment","time","meanRisk")],
-                                 boot.mrisks,by=key1),
-                riskComparison = merge(riskComparison[,.SD,.SDcols = c("Treatment.A","Treatment.B","time","diff","ratio")],
-                                       boot.crisks,by=key2)
-                ))
-}
-# }}}
 
 ######################################################################
 ### calcBootATE.R ends here

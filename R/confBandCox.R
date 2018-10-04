@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: apr 21 2017 (17:40) 
 ## Version: 
-## last-updated: jul 18 2017 (14:16) 
+## last-updated: jun  6 2018 (15:48) 
 ##           By: Brice Ozenne
-##     Update #: 24
+##     Update #: 28
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -23,12 +23,12 @@
 #' @param n.sim The number of simulations used to compute the quantiles.
 #' @param conf.level Level of confidence.
 #' 
-confBandCox <- function(iid, se, n.sim, conf.level){  
+confBandCox <- function(iid, se, n.sim, conf.level){    
     # NOTE
     # iid must be (n.new,n.times,n.object)
     #  se must be (n.new,n.times)
     dimTempo <- dim(iid)
-    
+
     new.quantile <- quantileProcess_cpp(nObject = dimTempo[3],
                                         nNew = dimTempo[1],
                                         nSim = n.sim,

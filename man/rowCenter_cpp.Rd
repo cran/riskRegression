@@ -23,7 +23,6 @@ sweep(x, MARGIN = 2, FUN = "-", STATS = 1:5)
 rowCenter_cpp(x, 1:5 )
 
 rowCenter_cpp(x, colMeans(x) )
-
 }
 \author{
 Brice Ozenne <broz@sund.ku.dk>

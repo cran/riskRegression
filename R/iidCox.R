@@ -64,52 +64,58 @@
 iidCox <- function(object, newdata = NULL,
                    baseline.iid = TRUE, tau.hazard = NULL, store.iid = "full", 
                    keep.times = TRUE){
-  
-    # {{{ extract elements from object
-  infoVar <- coxVariableName(object)
-  iInfo <- coxVarCov(object)
-  object.design <- coxDesign(object)
-  
-  object.status <- object.design[,"status"]
-  object.time <- object.design[,"stop"]
-  object.strata <- coxStrata(object, data = NULL, strata.vars = infoVar$strata.vars)
-  object.levelStrata <- levels(object.strata)
-  object.eXb <- exp(coxLP(object, data = NULL, center = FALSE))
-  object.LPdata <- as.matrix(object.design[,infoVar$lpvars,drop = FALSE])
-  nStrata <- length(levels(object.strata))
-  # }}}
+
+                                        # {{{ extract elements from object
+    iInfo <- coxVarCov(object)
+    object.modelFrame <- coxModelFrame(object)
+    infoVar <- coxVariableName(object, model.frame = object.modelFrame)
+    nVar <- length(infoVar$lpvars)
     
-    # {{{ Extract new observations
+    object.strata <- coxStrata(object, data = NULL, strata.vars = infoVar$stratavars)
+    object.levelStrata <- levels(object.strata)
+    object.eXb <- exp(coxLP(object, data = NULL, center = FALSE))
+    if(nVar>0){
+        object.LPdata <- as.matrix(object.modelFrame[,.SD,.SDcols = infoVar$lpvars])
+    }else{
+        object.LPdata <- NULL
+    }
+    nStrata <- length(levels(object.strata))
+                                        # }}}
+    
+                                        # {{{ Extract new observations
     if(!is.null(newdata)){
     
-      if("data.frame" %in% class(newdata) == FALSE){
-          stop("class of \'newdata\' must inherit from data.frame \n")
-      }
+        if("data.frame" %in% class(newdata) == FALSE){
+            stop("class of \'newdata\' must inherit from data.frame \n")
+        }
     
-    # if(infoVar$status %in% names(newdata)){ # call Cox model with with event==1
-    tempo <- with(newdata, eval(coxFormula(object)[[2]]))
-    new.status <- tempo[,2]
-    new.time <- tempo[,1]
-    # }else{ # Cox model from CSC 
-    #    new.status <- newdata[[infoVar$status]]
-    #    new.time <- newdata[[infoVar$time]]
-    # }
+                                        # if(infoVar$status %in% names(newdata)){ # call Cox model with with event==1
+        tempo <- with(newdata, eval(coxFormula(object)[[2]]))
+        new.status <- tempo[,2]
+        new.time <- tempo[,1]
+                                        # }else{ # Cox model from CSC 
+                                        #    new.status <- newdata[[infoVar$status]]
+                                        #    new.time <- newdata[[infoVar$time]]
+                                        # }
     
-    new.strata <- coxStrata(object, data = newdata, 
-                            sterms = infoVar$sterms, strata.vars = infoVar$strata.vars, levels = object.levelStrata, strata.levels = infoVar$strata.levels)
-    new.eXb <- exp(coxLP(object, data = newdata, center = FALSE))
-    new.LPdata <- model.matrix(object, newdata)
+        new.strata <- coxStrata(object,
+                                data = newdata, 
+                                sterms = infoVar$strata.sterms,
+                                strata.vars = infoVar$stratavars,
+                                strata.levels = infoVar$strata.levels)
+        new.eXb <- exp(coxLP(object, data = newdata, center = FALSE))
+        new.LPdata <- model.matrix(object, data = newdata)
     
-  }else{
+    }else{
     
-    new.status <-  object.status
-    new.time <-  object.time
-    new.strata <-  object.strata
-    new.eXb <- object.eXb
-    new.LPdata <- object.LPdata
+      new.status <-  object.modelFrame[["status"]]
+      new.time <-  object.modelFrame[["stop"]]
+      new.strata <-  object.strata
+      new.eXb <- object.eXb
+      new.LPdata <- object.LPdata
     
   }
-    # }}}
+                                        # }}}
     
     # {{{ tests 
     ## time at which the influence function is evaluated
@@ -122,7 +128,6 @@ iidCox <- function(object, newdata = NULL,
     # }}}
     
     # {{{ Compute quantities of interest
-    p <- NCOL(object.LPdata)
   
     ## baseline hazard
     lambda0 <- predictCox(object,
@@ -130,7 +135,7 @@ iidCox <- function(object, newdata = NULL,
                           centered = FALSE,
                           keep.strata = TRUE)
     etime1.min <- rep(NA, nStrata)
-  
+    
     ## S0, E, jump times
     object.index_strata <- list() 
     object.order_strata <- list()
@@ -153,15 +158,20 @@ iidCox <- function(object, newdata = NULL,
     new.order <- NULL
   
     for(iStrata in 1:nStrata){
-    
+
         ## reorder object data
         object.index_strata[[iStrata]] <- which(object.strata == object.levelStrata[iStrata])
-        object.order_strata[[iStrata]] <- order(object.time[object.index_strata[[iStrata]]])
-    
-        object.eXb_strata[[iStrata]] <- object.eXb[object.index_strata[[iStrata]][object.order_strata[[iStrata]]]]
-        object.LPdata_strata[[iStrata]] <- object.LPdata[object.index_strata[[iStrata]][object.order_strata[[iStrata]]],,drop = FALSE]
-        object.status_strata[[iStrata]] <- object.status[object.index_strata[[iStrata]][object.order_strata[[iStrata]]]]
-        object.time_strata[[iStrata]] <- object.time[object.index_strata[[iStrata]][object.order_strata[[iStrata]]]]
+        object.order_strata[[iStrata]] <- order(object.modelFrame[object.index_strata[[iStrata]], .SD$stop])
+
+        indexTempo <- object.index_strata[[iStrata]][object.order_strata[[iStrata]]]
+        object.eXb_strata[[iStrata]] <- object.eXb[indexTempo]
+        if(nVar>0){
+            object.LPdata_strata[[iStrata]] <- object.LPdata[indexTempo,,drop = FALSE]
+        }else{
+            object.LPdata_strata[[iStrata]] <- matrix(nrow = 0, ncol = 0)
+        }
+        object.status_strata[[iStrata]] <- object.modelFrame[indexTempo, .SD$status]
+        object.time_strata[[iStrata]] <- object.modelFrame[indexTempo, .SD$stop]
     
         ## reorder new data
         if(!is.null(newdata)){
@@ -169,7 +179,11 @@ iidCox <- function(object, newdata = NULL,
             new.order_strata[[iStrata]] <- order(new.time[new.index_strata[[iStrata]]])
       
             new.eXb_strata[[iStrata]] <- new.eXb[new.index_strata[[iStrata]][new.order_strata[[iStrata]]]]
-            new.LPdata_strata[[iStrata]] <- new.LPdata[new.index_strata[[iStrata]][new.order_strata[[iStrata]]],,drop = FALSE]
+            if(nVar>0){
+                new.LPdata_strata[[iStrata]] <- new.LPdata[new.index_strata[[iStrata]][new.order_strata[[iStrata]]],,drop = FALSE]
+            }else{
+                new.LPdata_strata[[iStrata]] <- matrix(nrow = 0, ncol = 0)
+            }
             new.status_strata[[iStrata]] <- new.status[new.index_strata[[iStrata]][new.order_strata[[iStrata]]]]
             new.time_strata[[iStrata]] <- new.time[new.index_strata[[iStrata]][new.order_strata[[iStrata]]]]
         }else{
@@ -187,7 +201,7 @@ iidCox <- function(object, newdata = NULL,
                                       eventtime = object.time_strata[[iStrata]],
                                       eXb = object.eXb_strata[[iStrata]],
                                       X = object.LPdata_strata[[iStrata]],
-                                      p = p, add0 = TRUE)
+                                      p = nVar, add0 = TRUE)
     
         new.indexJump[[iStrata]] <- prodlim::sindex(Ecpp[[iStrata]]$Utime1, new.time) - 1
         # if event/censoring is before the first event in the training dataset 
@@ -225,7 +239,7 @@ iidCox <- function(object, newdata = NULL,
         new.indexJump_strata <- new.indexJump[[iStrata]][new.index_strata[[iStrata]][new.order_strata[[iStrata]]]]
     
         ## IF
-        if(p>0){
+        if(nVar > 0){
             if(store.iid != "approx"){
                 IFbeta_tempo <- IFbeta_cpp(newT = new.time_strata[[iStrata]],
                                            neweXb = new.eXb_strata[[iStrata]],
@@ -236,14 +250,14 @@ iidCox <- function(object, newdata = NULL,
                                            E1 = Ecpp[[iStrata]]$E,
                                            time1 = Ecpp[[iStrata]]$Utime1,
                                            iInfo = iInfo,
-                                           p = p)
+                                           p = nVar)
             }else{
                 IFbeta_tempo <- IFbetaApprox_cpp(newX = new.LPdata_strata[[iStrata]],
                                                  newStatus = new.status_strata[[iStrata]],
                                                  newIndexJump = new.indexJump_strata,  
                                                  E1 = Ecpp[[iStrata]]$E,
                                                  iInfo = iInfo,
-                                                 p = p)
+                                                 p = nVar)
             }
         }else{
             IFbeta_tempo <- matrix(NA, ncol = 1, nrow = length(new.index_strata[[iStrata]]))
@@ -289,7 +303,7 @@ iidCox <- function(object, newdata = NULL,
     
             ## E
             nUtime1_strata <- length(Ecpp[[iStrata]]$Utime1)
-            if(p>0){
+            if(nVar > 0){
                 Etempo <- Ecpp[[iStrata]]$E[-NROW(Ecpp[[iStrata]]$E),,drop = FALSE]
             }else{
                 Etempo <- matrix(0, ncol = 1, nrow = nUtime1_strata-1)
@@ -304,7 +318,7 @@ iidCox <- function(object, newdata = NULL,
                                               E1 = Etempo,
                                               time1 = timeStrata, lastTime1 = Ecpp[[iStrata]]$Utime1[nUtime1_strata], # here lastTime1 will not correspond to timeStrata[length(timeStrata)] when there are censored observations
                                               lambda0 = lambda0Strata,
-                                              p = p, strata = iStrata,
+                                              p = nVar, strata = iStrata,
                                               exact = (store.iid!="approx"), minimalExport = (store.iid=="minimal")
                                               )      
             }else{

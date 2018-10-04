@@ -6,12 +6,13 @@
 \usage{
 plotCalibration(x, models, times, method = "nne", round = TRUE,
   bandwidth = NULL, q = 10, bars = FALSE, hanging = FALSE,
-  names = "quantiles", pseudo, rug, show.frequencies = FALSE, plot = TRUE,
-  add = FALSE, diag = !add, legend = !add, auc.in.legend = TRUE,
-  brier.in.legend = TRUE, axes = !add, xlim = c(0, 1), ylim = c(0, 1),
-  xlab = ifelse(bars, "Risk groups", "Predicted risk"),
-  ylab = "Observed frequency", col, lwd, lty, pch, type, cause = 1,
-  percent = TRUE, na.action = na.fail, cex = 1, ...)
+  names = "quantiles", pseudo, rug, show.frequencies = FALSE,
+  plot = TRUE, add = FALSE, diag = !add, legend = !add,
+  auc.in.legend = TRUE, brier.in.legend = TRUE, axes = !add,
+  xlim = c(0, 1), ylim = c(0, 1), xlab = ifelse(bars, "Risk groups",
+  "Predicted risk"), ylab = "Observed frequency", col, lwd, lty, pch,
+  type, cause = 1, percent = TRUE, na.action = na.fail, cex = 1,
+  ...)
 }
 \arguments{
 \item{x}{Object obtained with function \code{Score}}
@@ -118,6 +119,7 @@ fb2=glm(Y~X1+X3+X6+X7,data=db,family="binomial")
 xb=Score(list(model1=fb1,model2=fb2),Y~1,data=db,
           plots="cal")
 plotCalibration(xb)
+plotCalibration(xb,models=1,bars=TRUE,names.cex=1.3)
 
 # survival
 library(survival)
