@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Oct 13 2017 (10:50) 
 ## Version: 
-## Last-Updated: Mar 23 2018 (14:14) 
-##           By: Paul Blanche
-##     Update #: 47
+## Last-Updated: Jan 29 2019 (11:13) 
+##           By: Thomas Alexander Gerds
+##     Update #: 56
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -38,7 +38,7 @@ getLegendData <- function(object,
         format.auc <- paste0("%1.",digits,"f [%1.",digits,"f;%1.",digits,"f]")
     if (missing(format.brier))
         format.brier <- paste0("%1.",digits,"f [%1.",digits,"f;%1.",digits,"f]")
-    if (is.null(object$null.model) || drop.null.model==TRUE){
+    if (is.null(object$null.model) || drop.null.model[[1]]==TRUE){
         keep.null.model <- FALSE
     }else{
         if (brier.in.legend==TRUE){
@@ -60,7 +60,6 @@ getLegendData <- function(object,
                         warning("Time point not specified, use max of the available times: ",tp)
                 } else{ ## can only do one time point
                     tp <- times[[1]]
-                    ## browser()                    
                     if (!(tp%in%unique(auc.data$times)))
                         stop(paste0("Requested time ",times[[1]]," is not in object"))
                 }
@@ -97,7 +96,7 @@ getLegendData <- function(object,
                 }
                 brier.data <- brier.data[times==tp]
             }else tp <- NULL
-            if (keep.null.model==FALSE){
+            if (!is.null(object$null.model) && keep.null.model[[1]]==FALSE){
                 brier.data <- brier.data[model!=object$null.model]
             }
             brier.data[,model:=factor(model,levels=models)]

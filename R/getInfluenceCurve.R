@@ -120,7 +120,7 @@ getInfluenceCurve.Brier1 <- function(t,time,Yt,residuals,MC){
     Brier <- mean(residuals)
     ## FIXME: make sure that sindex cannot be 0
     ## browser(skipCalls=1)
-    if (length(dim(MC))==3) browser()
+    ## if (length(dim(MC))==3) browser()
     Int0tdMCsurEffARisk <- MC[prodlim::sindex(jump.times=unique(time),eval.times=t),,drop=FALSE]
     IF.Brier=hit1+hit2-Brier + mean(hit1)*Int0tdMCsurEffARisk + colMeans(MC*hit2)
 }
@@ -175,8 +175,12 @@ getInfluenceCurve.Brier <- function(t,
         hit1=(time>t)*residuals ## equation (7)
         hit2=(time<=t)*residuals ## equation (8) 
         Brier <- mean(residuals)
-        Int0tdMCsurEffARisk <- rbind(0,IC.G)[1+prodlim::sindex(jump.times=unique(time),eval.times=t),,drop=FALSE]
-        IF.Brier=hit1+hit2-Brier + mean(hit1)*Int0tdMCsurEffARisk + colMeans(IC.G*hit2)
+        if (!is.null(IC.G)){
+            Int0tdMCsurEffARisk <- rbind(0,IC.G)[1+prodlim::sindex(jump.times=unique(time),eval.times=t),,drop=FALSE]
+            IF.Brier <- hit1+hit2-Brier + mean(hit1)*Int0tdMCsurEffARisk + colMeans(IC.G*hit2)
+        }else{# uncensored
+            IF.Brier <- hit1+hit2-Brier
+        }
         IF.Brier
     }
 }

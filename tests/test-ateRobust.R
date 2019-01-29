@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: aug 15 2018 (11:42) 
 ## Version: 
-## Last-Updated: Oct  4 2018 (10:17) 
+## Last-Updated: Oct  8 2018 (07:03) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 79
+##     Update #: 80
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -55,9 +55,9 @@ test_that("check point estimate vs. manual calculations", {
     expect_equal(dtS[,mean(X1*Y/pi)],e.ateRobust$ate.value["risk.1","IPTW.AIPCW"])
     expect_equal(dtS[,mean(X1*Y/pi + r*(1-X1/pi))],e.ateRobust$ate.value["risk.1","AIPTW.IPCW"])
     expect_equal(dtS[,mean(X1*Y/pi + r*(1-X1/pi))],e.ateRobust$ate.value["risk.1","AIPTW.AIPCW"])
-})
+## })
 
-test_that("check se vs. manual calculations", {
+## test_that("check se vs. manual calculations", {
     iid.Gformula1 <- (dtS$r - mean(dtS$r))/NROW(dtS)
     iid.Gformula2 <- colMeans(iid.Surv)
     iid.Gformula <- iid.Gformula1 + iid.Gformula2

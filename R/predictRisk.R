@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02) 
 ## Version: 
-## last-updated: Aug 17 2018 (12:26) 
+## last-updated: Jan 29 2019 (11:04) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 116
+##     Update #: 121
 #----------------------------------------------------------------------
 ## 
 ### Commentary:
@@ -65,7 +65,6 @@
 #' columns as \code{length(times)}. Each entry is a probability and in
 #' rows the values should be increasing.
 #' @author Thomas A. Gerds \email{tag@@biostat.ku.dk}
-#' @seealso See \code{\link{predictRisk}}.
 #' @details
 #' In uncensored binary outcome data there is no need to choose a time point.
 #'
@@ -404,7 +403,6 @@ predictRisk.CSCTD <- function(object,newdata,times,cause,landmark,...){
 ## original data are included
 ## survival.survfit.coxph <- getFromNamespace("survfit.coxph",ns="survival")
 ## survival.summary.survfit <- getFromNamespace("summary.survfit",ns="survival")
-## browser(skipCalls=1)
 ## survfit.object <- survival::survfit(object,newdata=newdata,se.fit=FALSE,conf.int=FALSE)
 ## if (is.null(attr(object$terms,"specials")$strata)){
 ## ## case without strata 
@@ -474,7 +472,7 @@ predictRisk.selectCox <- function(object,newdata,times,...){
 ##' @export 
 predictRisk.prodlim <- function(object,newdata,times,cause,...){
     ## require(prodlim)
-    if (object$model=="competing.risks" && missing(cause))
+    if (object$model[[1]]=="competing.risks" && missing(cause))
         stop(paste0("Cause is missing. Should be one of the following values: ",paste(attr(object$model.response,"states"),collapse=", ")))
     p <- predict(object=object,
                  cause=cause,
@@ -501,7 +499,7 @@ predictRisk.prodlim <- function(object,newdata,times,cause,...){
 }
 
 predict.survfit <- function(object,newdata,times,bytimes=TRUE,type="cuminc",fill="last",...){
-    if (length(class(object))!=1 || class(object)!="survfit" || object$typ !="right")
+    if (length(class(object))!=1 || class(object)[[1]]!="survfit" || object$type[[1]] !="right")
         stop("Predictions only available \nfor class 'survfit', possibly stratified Kaplan-Meier fits.\n For class 'cph' Cox models see survest.cph.")
     if (missing(newdata))
         npat <- 1

@@ -26,9 +26,9 @@ rownames(y) <- rownames(x)
 expect_equal(x,y)
 expect_equal(predictRisk(f1,newdata=test.d),
              as.numeric(predictStatusProb(f1,newdata=test.d)))
-daimres <- Daim::deLong.test(data.frame(R1=predictRisk(f1,newdata=test.d),
-                                        R2=predictRisk(f2,newdata=test.d),R3=predictRisk(f3,newdata=test.d)), labels=test.d$Y, labpos="1")
-z <- daimres$AUC[,1]
+# daimres <- Daim::deLong.test(data.frame(R1=predictRisk(f1,newdata=test.d),
+                                        # R2=predictRisk(f2,newdata=test.d),R3=predictRisk(f3,newdata=test.d)), labels=test.d$Y, labpos="1")
+# z <- daimres$AUC[,1]
 #+END_SRC
 
 ** ROC plot

@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: apr 11 2018 (17:05) 
 ## Version: 
-## Last-Updated: Sep 11 2018 (12:26) 
+## Last-Updated: Jan 29 2019 (10:49) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 69
+##     Update #: 71
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -24,7 +24,7 @@ calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
                         verbose){
     name.estimate <- names(pointEstimate)
     no.cl <- is.null(cl)
-    if( (no.cl == FALSE) && (mc.cores == 1) ){ ## i.e. the user has not initialized the number of cores
+    if( (no.cl[[1]] == FALSE) && (mc.cores[[1]] == 1) ){ ## i.e. the user has not initialized the number of cores
         mc.cores <- length(cl)
     }
     ## cores
@@ -45,9 +45,8 @@ calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
     bootseeds <- sample(1:1000000,size=B,replace=FALSE)
     ## bootstrap
     if(handler[[1]] %in% c("snow","parallel")) {
-                                        # {{{ use boot package
-
-        if(handler=="snow" && no.cl){
+        # {{{ use boot package
+        if(handler[[1]]=="snow" && no.cl[[1]]==TRUE){
             ## initialize CPU
             cl <- parallel::makeCluster(mc.cores)
             ## load packages
@@ -69,32 +68,21 @@ calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
             if ("try-error" %in% class(objectBoot)){
                 stop(paste0("Failed to fit model ",class(object)))
             }
-            Gargs <- list(object=objectBoot,
-                          data=dataBoot,
-                          treatment=treatment,
-                          contrasts=contrasts,
-                          times=times,
-                          cause=cause,
-                          landmark=landmark,
-                          n.contrasts = n.contrasts,
-                          levels = levels,
-                          dots)
+            Gargs <- list(object=objectBoot,data=dataBoot,treatment=treatment,contrasts=contrasts,times=times,cause=cause,landmark=landmark,n.contrasts = n.contrasts,levels = levels,dots)
             if (TD) Gargs <- c(Gargs,list(formula=formula))
             iBoot <- tryCatch(do.call(Gformula, Gargs),
                               error = function(x){return(NULL)})
             if(is.null(iBoot)){ ## error handling
                 out <- setNames(rep(NA, length(name.estimate), name.estimate))
             }else{
-                out <- setNames(c(iBoot$meanRisk$meanRisk,
-                                  iBoot$riskComparison$diff,
-                                  iBoot$riskComparison$ratio), name.estimate)
+                out <- setNames(c(iBoot$meanRisk$meanRisk,iBoot$riskComparison$diff,iBoot$riskComparison$ratio), name.estimate)
             }
             return(out)
         }, sim = "ordinary", stpe = "indices", strata = rep(1, n.obs),
         parallel = handler[[1]], ncpus = mc.cores, cl = cl)
         # }}}
     }else {
-        if (handler[[1]]=="foreach" && mc.cores>1){
+        if (handler[[1]]=="foreach" && mc.cores[[1]]>1){
             # {{{ foreach
             if(no.cl){
                 if(verbose){
@@ -104,9 +92,8 @@ calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
                 }                
             }           
             doParallel::registerDoParallel(cl)
-            
+            ## progress bar 
             if(verbose){pb <- txtProgressBar(max = B, style = 3)}
-
             b <- NULL ## [:forCRANcheck:] foreach
             boots <- foreach::`%dopar%`(foreach::foreach(b = 1:B, .packages = addPackage, .export = c("formula")), { ## b <- 1
                 set.seed(bootseeds[[b]])
@@ -117,16 +104,7 @@ calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
                 if ("try-error" %in% class(objectBoot)){
                     stop(paste0("Failed to fit model ",class(object),ifelse(try(b>0,silent=TRUE),paste0(" in bootstrap step ",b,"."))))
                 }
-                Gargs <- list(object=objectBoot,
-                              data=dataBoot,
-                              treatment=treatment,
-                              contrasts=contrasts,
-                              times=times,
-                              cause=cause,
-                              landmark=landmark,
-                              n.contrasts = n.contrasts,
-                              levels = levels,
-                              dots)
+                Gargs <- list(object=objectBoot,data=dataBoot,treatment=treatment,contrasts=contrasts,times=times,cause=cause,landmark=landmark,n.contrasts = n.contrasts,levels = levels,dots)
                 if (TD) Gargs <- c(Gargs,list(formula=formula))
                 iBoot <- tryCatch(do.call(Gformula, Gargs),
                                   error = function(x){return(NULL)})
@@ -134,10 +112,10 @@ calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
             })
             if(verbose){close(pb)}
             if(no.cl){parallel::stopCluster(cl)}
-                                        # }}}
+            # }}}
         }else{
-                                        # {{{ mcapply
-            if(Sys.info()["sysname"] == "Windows" && mc.cores>1){
+            # {{{ mcapply
+            if(Sys.info()["sysname"] == "Windows" && mc.cores[[1]]>1){
                 message("mclapply cannot perform parallel computations on Windows \n",
                         "consider setting argument handler to \"foreach\" \n")
                 mc.cores <- 1
@@ -151,16 +129,7 @@ calcBootATE <- function(object, pointEstimate, Gformula, data, formula, TD,
                     stop(paste0("Failed to fit model",ifelse(try(b>0,silent=TRUE),paste0(" in bootstrap step ",b,"."))))
                 }
 
-                Gargs <- list(object=objectBoot,
-                              data=dataBoot,
-                              treatment=treatment,
-                              contrasts=contrasts,
-                              times=times,
-                              cause=cause,
-                              landmark=landmark,
-                              n.contrasts = n.contrasts,
-                              levels = levels,
-                              dots)
+                Gargs <- list(object=objectBoot,data=dataBoot,treatment=treatment,contrasts=contrasts,times=times,cause=cause,landmark=landmark,n.contrasts = n.contrasts,levels = levels,dots)
                 if (TD) Gargs <- c(Gargs,list(formula=formula))
                 iBoot <- tryCatch(do.call(Gformula, Gargs),
                                   error = function(x){return(NULL)})

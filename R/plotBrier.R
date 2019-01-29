@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Feb 23 2017 (11:07) 
 ## Version: 
-## last-updated: Apr 27 2018 (11:45) 
+## last-updated: Jan 29 2019 (10:49) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 44
+##     Update #: 47
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -162,7 +162,7 @@ plotBrier <- function(x,
             do.call("lines",thisline)},by=contrast]
     }
     ## legend
-    if (!(is.logical(legend[1]) && legend[1]==FALSE)){
+    if (!(is.logical(legend[[1]]) && legend[[1]]==FALSE)){
         do.call("legend",control$legend)
     }
     ## x-axis

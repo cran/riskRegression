@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Oct 23 2016 (08:53) 
 ## Version: 
-## last-updated: Oct  3 2018 (15:33) 
+## last-updated: Jan 29 2019 (11:13) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 827
+##     Update #: 852
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -51,7 +51,7 @@
 #' either \code{"mclapply"} or \code{"foreach"}.
 #' if "foreach" use \code{doparallel} to create a cluster.
 #' @param mc.cores [integer, >0] The number of cores to use,
-#' i.e. at most how many child processes will be run simultaneously.
+#' i.e., the upper limit for the number of child processes that run simultaneously.
 #' Passed to \code{parallel::mclapply} or \code{doparallel::registerdoparallel}.
 #' The option is initialized from environment variable mc_cores if set.
 #' @param cl A parallel socket cluster used to perform cluster calculation in parallel.
@@ -127,27 +127,26 @@
 #' 
 #' ## generate data
 #' n <- 100
-#' dtS <- sampleData(n, outcome="survival")
-#' dtS[, event5 := eventtime<=5]
-#' dtS[, X2 := as.numeric(X2)]
+#' dtB <- sampleData(n, outcome="binary")
+#' dtB[, X2 := as.numeric(X2)]
 #' 
-#' ## estimate the Cox model
-#' fit <- glm(formula = event5 ~ X1+X2, data=dtS, family = "binomial")
+#' ## estimate a logistic regression model
+#' fit <- glm(formula = Y ~ X1+X2, data=dtB, family = "binomial")
 #' 
-#' ## compute the ATE at times 5 using X1 as the treatment variable
-#' ## only punctual estimate (argument se = FALSE)
-#' ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5,
-#'                se = FALSE)
+#' ## compute the ATE using X1 as the treatment variable
+#' ## only point estimate (argument se = FALSE)
+#' ateFit1a <- ate(fit, data = dtB, treatment = "X1", se = FALSE)
 #' ateFit1a
 #'
 #' \dontrun{
 #' ## standard error / confidence intervals computed using the influence function
-#' ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5,
+#' ateFit1b <- ate(fit, data = dtB, treatment = "X1",
+#'                times = 5, ## just for having a nice output not used in computations
 #'                se = TRUE, B = 0)
 #' ateFit1b
 #'
 #' ## standard error / confidence intervals computed using 100 boostrap samples
-#' ateFit1d <- ate(fit, data = dtS, treatment = "X1",
+#' ateFit1d <- ate(fit, data = dtB, treatment = "X1",
 #'                 times = 5, se = TRUE, B = 100)
 #' ateFit1d
 #' 
@@ -271,6 +270,14 @@ ate <- function(object,
   diff.se=ratio.se=.GRP=lower=upper=diff.lower=diff.upper=diff.p.value=ratio.lower=ratio.upper=ratio.p.value <- NULL
    
     handler <- match.arg(handler, c("foreach","mclapply","snow","parallel"))
+    if(inherits(object,"glm")){
+        if(missing(times)){
+            times <- NA
+        }else if(length(times)!=1){
+            warning("Argument \'times\' has no effect when using a glm object \n",
+                    "It should be set to NA \n")
+        }
+    }
                                         # {{{ checking for time-dependent covariates (left-truncation)
     TD <- switch(class(object)[[1]],"coxph"=(attr(object$y,"type")=="counting"),
                  "CauseSpecificCox"=(attr(object$models[[1]]$y,"type")=="counting"),FALSE)
@@ -291,15 +298,15 @@ ate <- function(object,
                                         # }}}
                                         # {{{ Prepare
     dots <- list(...)
-    if(se==0 && B>0){
-        warning("argument 'se=0' means 'no standard errors' so number of bootstrap repetitions is forced to B=0.")
+    if(se[[1]]==0 && B[[1]]>0){
+        warning("Argument 'se=0' means 'no standard errors' so number of bootstrap repetitions is forced to B=0.")
     }
-    if(iid && B>0){
+    if(iid[[1]] && B[[1]]>0){
         stop("Influence function cannot be computed when using the bootstrap approach \n",
              "Either set argument \'iid\' to FALSE to not compute the influence function \n",
              "or set argument \'B\' to 0 \n")
     }
-    if(band && B>0){
+    if(band[[1]] && B[[1]]>0){
         stop("Confidence bands cannot be computed when using the bootstrap approach \n",
              "Either set argument \'band\' to FALSE to not compute the confidence bands \n",
              "or set argument \'B\' to 0 to use the estimate of the asymptotic distribution instead of the bootstrap\n")
@@ -313,6 +320,10 @@ ate <- function(object,
         }
         if(!is.null(strata) ){
             stop("Argument strata must be NULL when argument treatment is specified. \n")
+        }
+        if(is.numeric(data[[treatment]])){ ## for now character variables are tolerated
+            stop("The treatment variable must be a factor variable. \n",
+                 "Convert treatment to factor, re-fit the object using this new variable and then call ate. \n")
         }
         strata <- treatment
     }else{
@@ -336,7 +347,7 @@ ate <- function(object,
     test.CR <- !missing(cause) # test whether the argument cause has been specified, i.e. it is a competing risk model
     if(test.CR==FALSE){cause <- NA}
   
-    if(B==0 && (se || band || iid)){
+    if(B[[1]]==0 && (se[[1]] || band[[1]] || iid[[1]])){
         validClass <- c("CauseSpecificCox","coxph","cph","phreg","glm")
         if(all(validClass %in% class(object) == FALSE)){
             stop("Standard error based on the influence function only implemented for \n",
@@ -372,7 +383,7 @@ ate <- function(object,
     n.contrasts <- length(contrasts)
     n.times <- length(times)
     n.obs <- NROW(data)
-  
+    
   # }}}
   
     # {{{ Checking the model
@@ -404,7 +415,7 @@ ate <- function(object,
     # }}}
 
     # {{{ Confidence interval    
-    if(se || band || iid){
+    if(se[[1]] || band[[1]] || iid[[1]]){
         if (TD){
             key1 <- c("Treatment","landmark")
             key2 <- c("Treatment.A","Treatment.B","landmark")
@@ -529,12 +540,12 @@ ate <- function(object,
     if(confint){
         out <- stats::confint(out)
     }
-    if(band && se==FALSE){
+    if(band[[1]] && se[[1]]==FALSE){
         out$meanRisk[["meanRisk.se"]] <- NULL
         out$riskComparison[["diff.se"]] <- NULL
         out$riskComparison[["ratio.se"]] <- NULL
     }
-    if(band && iid==FALSE){
+    if(band[[1]] && iid[[1]]==FALSE){
         out[paste0(c("mean","diff","ratio"),"Risk.iid")] <- NULL
     }
 
@@ -616,7 +627,7 @@ Gformula_TI <- function(object,
                         n.contrasts,
                         levels,
                         ...){
-
+    
     meanRisk <- lapply(1:n.contrasts,function(i){ ## i <- 1
         ## prediction for the hypothetical worlds in which every subject is treated with the same treatment
         if(!is.null(treatment)){

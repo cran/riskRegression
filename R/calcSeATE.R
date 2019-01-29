@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: apr  5 2018 (17:01) 
 ## Version: 
-## Last-Updated: Oct  2 2018 (15:03) 
-##           By: Thomas Alexander Gerds
-##     Update #: 278
+## Last-Updated: jan 24 2019 (09:52) 
+##           By: Brice Ozenne
+##     Update #: 284
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -153,18 +153,18 @@ calcSeATE <- function(object, data, times, cause,
         iTreatmentB <- pointEstimate$riskComparison[[2]][iContrast]
         iTime <- pointEstimate$riskComparison[[3]][iContrast]
 
-        iIndexA <- intersect(which(pointEstimate$meanRisk[[1]]==iTreatmentA),
-                             which(pointEstimate$meanRisk[[2]]==iTime))
-        iIndexB <- intersect(which(pointEstimate$meanRisk[[1]]==iTreatmentB),
-                             which(pointEstimate$meanRisk[[2]]==iTime))
+        ## use identical instead of which to be compatible with NA
+        iIndexTime <- which(sapply(pointEstimate$meanRisk[[2]],identical,iTime))
+        iIndexA <- intersect(which(pointEstimate$meanRisk[[1]]==iTreatmentA), iIndexTime)
+        iIndexB <- intersect(which(pointEstimate$meanRisk[[1]]==iTreatmentB), iIndexTime)
 
         ## Compute the iid function of the average treatment effect (difference)
-        out$diffRisk.iid[iContrast,] <- out$meanRisk.iid[iIndexA,] - out$meanRisk.iid[iIndexB,]
+        out$diffRisk.iid[iContrast,] <- out$meanRisk.iid[iIndexB,] - out$meanRisk.iid[iIndexA,]
           
         ## Compute the iid function of the average treatment effect (ratio)
         ## IF(A/B) = IF(A)/B-IF(B)A/B^2
-        term1 <- out$meanRisk.iid[iIndexA,] / pointEstimate$meanRisk[["meanRisk"]][iIndexB]
-        term2 <- out$meanRisk.iid[iIndexB,] * pointEstimate$meanRisk[["meanRisk"]][iIndexA] / pointEstimate$meanRisk[["meanRisk"]][iIndexB]^2
+        term1 <- out$meanRisk.iid[iIndexB,] / pointEstimate$meanRisk[["meanRisk"]][iIndexA]
+        term2 <- out$meanRisk.iid[iIndexA,] * pointEstimate$meanRisk[["meanRisk"]][iIndexB] / pointEstimate$meanRisk[["meanRisk"]][iIndexA]^2
         out$ratioRisk.iid[iContrast,] <- term1 - term2
         
     }
