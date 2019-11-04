@@ -21,7 +21,8 @@ hazard/survival.}
 \item{type}{One or several strings that match (either in lower or upper case or mixtures) one
 or several of the strings \code{"hazard"},\code{"cumhazard"}, \code{"survival"}.}
 
-\item{diag}{[logical] If \code{TRUE} only compute the hazard/cumlative hazard/survival for the i-th row in dataset at the i-th time.}
+\item{diag}{[logical] when \code{FALSE} the hazard/cumlative hazard/survival for all observations at all times is computed,
+otherwise it is only computed for the i-th observation at the i-th time.}
 
 \item{Lambda0}{the baseline hazard estimate returned by \code{BaseHazStrata_cpp}.}
 
@@ -61,14 +62,14 @@ Compute the standard error associated to the predictions from Cox regression mod
 using a first order von Mises expansion of the functional (cumulative hazard or survival).
 }
 \details{
-Can also return the empirical influence function of the functionals cumulative hazard or survival
-or the sum over the observations of the empirical influence function.
+Can also return the estimated influence function for the cumulative hazard function and survival probabilities
+ the sum over the observations of the estimated influence function.
 
 \code{store.iid="full"} compute the influence function for each observation at each time in the argument \code{times}
 before computing the standard error / influence functions.
 \code{store.iid="minimal"} recompute for each subject specific prediction the influence function for the baseline hazard.
 This avoid to store all the influence functions but may lead to repeated evaluation of the influence function.
-This solution is therefore efficient more efficient in memory usage but may not be in term of computation time.
+This solution is therefore more efficient in memory usage but may not be in terms of computation time.
 }
 \author{
 Brice Ozenne broz@sund.ku.dk, Thomas A. Gerds tag@biostat.ku.dk

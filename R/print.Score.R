@@ -1,18 +1,18 @@
-### print.Score.R --- 
+### print.Score.R ---
 #----------------------------------------------------------------------
 ## author: Thomas Alexander Gerds
-## created: May 31 2016 (11:32) 
-## Version: 
-## last-updated: Jun  5 2018 (11:54) 
+## created: May 31 2016 (11:32)
+## Version:
+## last-updated: Nov  4 2019 (12:22) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 34
+##     Update #: 57
 #----------------------------------------------------------------------
-## 
-### Commentary: 
-## 
+##
+### Commentary:
+##
 ### Change Log:
 #----------------------------------------------------------------------
-## 
+##
 ### Code:
 
 ##' Print method for risk prediction scores
@@ -20,18 +20,22 @@
 ##' @title Print Score object
 ##' @param x Object obtained with \code{Score.list}
 ##' @param digits Number of digits
+##' @param percent Logical. If \code{TRUE} show percentages.
 ##' @param ... passed to print
 #'
 #' @method print Score
 #' @export
-print.Score <- function(x,digits=3,...){
+print.Score <- function(x,digits,percent=TRUE,...){
+    if (missing(digits)){
+        if (percent==TRUE) digits <- 1 else digits <- 3
+    }
     for (s in c(x$summary)){
         cat(paste0("\nSummary statistics ",s,":\n"))
-        print(x[[s]],digits=digits, ...)
+        print(x[[s]],digits=digits,response.type=x$response.type,...)
     }
     for (m in c(x$metrics)){
         cat(paste0("\nMetric ",m,":\n"))
-        print(x[[m]],digits=digits, ...)
+        print(x[[m]],digits=digits,response.type=x$response.type,...)
     }
     for (p in c(x$plots)){
         cat(paste0("\nData for ",p," plot are stored in the object as x[[\"",p,"\"]].\n"))
@@ -64,27 +68,95 @@ print.Score <- function(x,digits=3,...){
             "The 'confidence intervals' and 'p-values' are obtained with the delta method after bootstrap.\n",
             sep="")
     })
+    if (x$split.method$internal.name == "crossval"){
+        cat("\n",x$split.method$name, " repeated ",
+            x$split.method$B,
+            " times.\n",
+            sep="")
+    }
 }
 
 #' @method print scoreAUC
 #' @export
-print.scoreAUC <- function(x,B,digits=3,...){
+print.scoreAUC <- function(x,B,digits=3,response.type,percent=TRUE,...){
+    AUC=se=lower=upper=delta.AUC=NULL
     cat("\nResults by model:\n\n")
-    print(x$score,digits=digits,...)
-    if (length(x$contrasts)>0){
-        cat("\nResults of model comparisons:\n\n")
-        print(x$contrasts,digits=digits,...)
+    if (percent[1]==TRUE){
+        fmt <- paste0("%1.",digits[[1]],"f")
+        X <- copy(x)
+        X$score[,AUC:=sprintf(fmt=fmt,100*AUC)]
+        if (match("se",colnames(X$score),nomatch=0)) X$score[,se:=NULL]
+        if (match("lower",colnames(X$score),nomatch=0)) X$score[,lower:=sprintf(fmt=fmt,100*lower)]
+        if (match("upper",colnames(X$score),nomatch=0)) X$score[,upper:=sprintf(fmt=fmt,100*upper)]
+        print(X$score,digits=digits,...)
+        message("\nNOTE: Values are multiplied by 100 and given in % (use print(...,percent=FALSE) to avoid this.")
+        if (length(x$contrasts)>0){
+            X$contrasts[,delta.AUC:=sprintf(fmt=fmt,100*delta.AUC)]
+            if (match("se",colnames(X$contrasts),nomatch=0)) X$contrasts[,se:=NULL]
+            if (match("lower",colnames(X$contrasts),nomatch=0)) X$contrasts[,lower:=sprintf(fmt=fmt,100*lower)]
+            if (match("upper",colnames(X$contrasts),nomatch=0)) X$contrasts[,upper:=sprintf(fmt=fmt,100*upper)]
+            cat("\nResults of model comparisons:\n\n")
+            print(X$contrasts,digits=digits,...)
+        }
+        message("\nNOTE: Values are multiplied by 100 and given in % (use print(...,percent=FALSE) to avoid this.")
+    }else{
+        print(x$score,digits=digits,...)
+        if (length(x$contrasts)>0){
+            cat("\nResults of model comparisons:\n\n")
+            print(x$contrasts,digits=digits,...)
+        }
     }
+    message("\nNOTE: The higher AUC the better.")
 }
 #' @method print scoreBrier
 #' @export
-print.scoreBrier <- function(x,B,digits=3,...){
+print.scoreBrier <- function(x,B,digits=3,response.type,percent=TRUE,...){
+    Brier=IPA=se=lower=upper=delta.Brier=NULL
     cat("\nResults by model:\n\n")
-    print(x$score,digits=digits,...)
-    if (length(x$contrasts)>0){
-        cat("\nResults of model comparisons:\n\n")
-        print(x$contrasts,digits=digits,...)
+    if (percent[1]==TRUE){
+        fmt <- paste0("%1.",digits[[1]],"f")
+        X <- copy(x)
+        X$score[,Brier:=sprintf(fmt=fmt,100*Brier)]
+        if (match("IPA",colnames(X$score),nomatch=0)) X$score[,IPA:=sprintf(fmt=fmt,100*IPA)]
+        if (match("se",colnames(X$score),nomatch=0)) X$score[,se:=NULL]
+        if (match("lower",colnames(X$score),nomatch=0)) X$score[,lower:=sprintf(fmt=fmt,100*lower)]
+        if (match("upper",colnames(X$score),nomatch=0)) X$score[,upper:=sprintf(fmt=fmt,100*upper)]
+        print(X$score,...)
+        message("\nNOTE: Values are multiplied by 100 and given in % (use print(...,percent=FALSE) to avoid this.")
+        if (length(x$contrasts)>0){
+            X$contrasts[,delta.Brier:=sprintf(fmt=fmt,100*delta.Brier)]
+            if (match("se",colnames(X$contrasts),nomatch=0)) X$contrasts[,se:=NULL]
+            if (match("lower",colnames(X$contrasts),nomatch=0)) X$contrasts[,lower:=sprintf(fmt=fmt,100*lower)]
+            if (match("upper",colnames(X$contrasts),nomatch=0)) X$contrasts[,upper:=sprintf(fmt=fmt,100*upper)]
+            cat("\nResults of model comparisons:\n\n")
+            print(X$contrasts,...)
+            message("\nNOTE: Values are multiplied by 100 and given in % (use print(...,percent=FALSE) to avoid this.")
+        }
+    }else{
+        print(x$score,digits=digits,...)
+        if (length(x$contrasts)>0){
+            cat("\nResults of model comparisons:\n\n")
+            print(x$contrasts,digits=digits,...)
+        }
     }
+    if (match("IPA",colnames(x$score),nomatch=0))
+        message("\nNOTE: The lower Brier the better, the higher IPA the better.")
+    else
+        message("\nNOTE: The lower Brier the better.")
+}
+
+#' @method print scorerisks
+#' @export
+print.scorerisks <- function(x,B,digits=3,response.type,...){
+    if (response.type=="binary")
+        data.table::setkeyv(x$score,c("risk"))
+    else
+        data.table::setkeyv(x$score,c("times","risk"))
+    print(x$score,digits=digits)
+    if ("times"%in%names(x$score))
+        print(data.table::dcast(x$score,times+ID~model,value.var="risk"))
+    else
+        print(data.table::dcast(x$score,ID~model,value.var="risk"))
 }
 
 

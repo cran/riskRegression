@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: sep  4 2017 (16:43) 
 ## Version: 
-## last-updated: aug 28 2018 (10:42) 
+## last-updated: sep 24 2019 (11:41) 
 ##           By: Brice Ozenne
-##     Update #: 151
+##     Update #: 154
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -22,7 +22,8 @@
 #'
 #' @inheritParams predictCox
 #' @param ... additional arguments to be passed to \code{\link{predictCox}}.
-#' 
+#'
+#' @details Note: the iid and standard errors are computed using the exponential approximation.
 
 ## * predictCoxPL (code)
 #' @rdname predictCoxPL
@@ -89,7 +90,7 @@ predictCoxPL <- function(object,
         if(is.data.table(newdata)){
             newdata <- copy(newdata)
         }else{
-            newdata <- as.data.table(newdata)
+            setDT(newdata)
         }
     }else if (missing(times)) {
         times <- numeric(0)

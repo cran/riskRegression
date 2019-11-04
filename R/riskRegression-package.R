@@ -46,7 +46,6 @@ NULL
 #' survival. Among such risk factors were the sex and age of the patients and
 #' the histological variables tumor thickness and ulceration (absent vs.
 #' present).
-#' 
 #
 #' 
 #' @name Melanoma
@@ -75,17 +74,18 @@ NULL
 ##' @examples
 ##' 
 ##' data(Melanoma)
-#'
+NULL
+
 #' @docType package
 #' @name riskRegression
 #' @useDynLib riskRegression, .registration=TRUE
-#' @importFrom abind abind
 #' @importFrom Rcpp sourceCpp evalCpp
+#' @importFrom grDevices rainbow
 #' @importFrom rms strat cph
 #' @importFrom ggplot2 autoplot aes aes_string element_blank element_line element_rect geom_errorbar geom_line geom_point geom_ribbon ggplot labs guide_legend guides scale_colour_manual scale_color_continuous scale_fill_manual scale_linetype_manual scale_y_continuous theme theme_bw "%+replace%"  unit xlab  ylab
 #' @importFrom survival Surv strata coxph
 #' @importFrom lava transform<-
-#' @importFrom data.table as.data.table copy data.table is.data.table melt rbindlist setnames setorder setcolorder setkey ":=" ".N" ".SD"
+#' @importFrom data.table data.table dcast setkeyv setDT as.data.table copy data.table is.data.table melt rbindlist setnames setorder setcolorder setkey ":=" ".N" ".SD"
 #' @importFrom prodlim Hist dimColor prodlim
 #' @importFrom foreach "%dopar%" foreach
 #' @importFrom cmprsk predict.crr

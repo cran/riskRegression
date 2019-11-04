@@ -12,8 +12,8 @@
   contrasts = TRUE, probs = c(0, 0.25, 0.5, 0.75, 1),
   cens.method = "ipcw", cens.model = "cox", split.method, B, M, seed,
   trainseeds, parallel = c("no", "multicore", "snow"), ncpus = 1,
-  cl = NULL, keep, predictRisk.args, debug = 0L, useEventTimes,
-  nullModel, censMethod, censModel, splitMethod, ...)
+  cl = NULL, progress.bar = 3, keep, predictRisk.args, debug = 0L,
+  useEventTimes, nullModel, censMethod, censModel, splitMethod, ...)
 }
 \arguments{
 \item{object}{List of risk predictions (see details and examples).}
@@ -30,10 +30,18 @@ interpreted.}
 apply. Case does not matter. Choices are \code{"AUC"} and \code{"Brier"}.}
 
 \item{summary}{Character vector specifying which summary
-statistics to apply to the predicted risks. The only choice is 
-\code{"riskQuantile"} which enables (time-point specific) boxplots of
-predicted risks conditional on the outcome (at the time-point).
-Set to \code{NULL} to avoid estimation of retrospective risk quantiles.}
+statistics to apply to the predicted risks. Choices are \code{"risks"}, \code{"IPA"},
+\code{"riskQuantile"} and \code{"ibs"}. Can be all \code{c("risks","IPA","riskQuantile","ibs")} or a subset thereof.
+\itemize{
+\item \code{"risks"} adds the predicted risks to the output.
+\item \code{"ipa"} computes the index of prediction accuracy (AKA R-squared) based on Brier scores for model vs null model
+\item \code{"riskQuantile"} calculates
+time-point specific boxplots for the
+predicted risks (or biomarker values) conditional on the outcome at the time-point.
+\item \code{"ibs"} calculates integrated Brier scores across the time points at which the Brier score is computed. This works only with
+time-to-event outcome and the results depend on the argument \code{times}.
+}
+Set to \code{NULL} to avoid estimation of summary statistics.}
 
 \item{plots}{Character vector specifying for which plots to put data into the result.
 Currently implemented are \code{"ROC"}, \code{"Calibration"} and \code{"boxplot"}.
@@ -53,7 +61,7 @@ the prediction performance is estimated at many prediction horizons.}
 
 \item{landmarks}{Not yet implemented.}
 
-\item{use.event.times}{If \code{TRUE} merge all unique event times with 
+\item{use.event.times}{If \code{TRUE} merge all unique event times with
 the vector given by argument \code{times}.}
 
 \item{null.model}{If \code{TRUE} fit a risk prediction model which ignores
@@ -71,9 +79,9 @@ at a usually very small expense of a slightly higher standard error.}
 \item{multi.split.test}{Logical or \code{0} or \code{1}. If \code{FALSE} or \code{0} do not calculate multi-split tests. This argument is ignored when \code{split.method} is "none".}
 
 \item{conf.int}{Either logical or a numeric value between 0 and 1. In right censored data,
-confidence intervals are based on Blanche et al (see references). Setting \code{FALSE} prevents the 
-computation confidence intervals. \code{TRUE} means compute 95 percent confidence 
-intervals and corresponding p-values for AUC and Brier score. If set to 0.87, the 
+confidence intervals are based on Blanche et al (see references). Setting \code{FALSE} prevents the
+computation confidence intervals. \code{TRUE} means compute 95 percent confidence
+intervals and corresponding p-values for AUC and Brier score. If set to 0.87, the
 level of significance is 13 percent. So, do not set it to 0.87.}
 
 \item{contrasts}{Either logical or a list of contrasts. A list of contrasts defines which risk prediction models (markers)
@@ -123,14 +131,16 @@ randomly splitting (bootstrapping) the data during cross-validation.}
 
 \item{cl}{An optional \code{parallel} or \code{snow} cluster for use if \code{parallel = "snow"}. If not supplied, a cluster on the local machine is created for the duration of the \code{Score} call.}
 
+\item{progress.bar}{Style for \code{txtProgressBar}. Can be 1,2,3 see \code{help(txtProgressBar)} or NULL to avoid the progress bar.}
+
 \item{keep}{list of characters (not case sensitive) which determines additional output.
 \code{"residuals"} provides Brier score residuals and
 \code{"splitindex"} provides sampling index used to split the data into training and validation sets.
 \code{"vcov"} provides the variance-covariance matrix of the estimated parameters.}
 
-\item{predictRisk.args}{A list of argument-lists to control how risks are predicted. 
+\item{predictRisk.args}{A list of argument-lists to control how risks are predicted.
  The names of the lists should be the S3-classes of the \code{object}.
- The argument-lists are then passed on to the S3-class specific predictRisk method. 
+ The argument-lists are then passed on to the S3-class specific predictRisk method.
  For example, if your object contains one or several random forest model fitted with the function randomForestSRC::rfsrc then you can
  specify additional arguments for the function riskRegression::predictRisk.rfsrc which will pass
  these on to the function randomForestSRC::predict.rfsrc. A specific example in this case would be
@@ -173,7 +183,7 @@ cross-validation. The function optionally provides results for plotting (time-po
 ROC curves, for (time-point specific) calibration curves and for (time-point specific) retrospective boxplots.
 
 For uncensored binary outcome the Delong-Delong test is used to contrast AUC of rival models.
-In right censored survival data (with and without competing risks) 
+In right censored survival data (with and without competing risks)
 the p-values correspond to Wald tests based on standard errors obtained with an estimate of the influence function
 as described in detail in the appendix of Blanche et al. (2015).
 
@@ -208,13 +218,13 @@ data = data.frame(id=1:N, y=rbinom(N,1,.3),x=rnorm(N))
 boot.index = sample(1:N,size=N,replace=TRUE)
 boot.index
 inbag = 1:N %in% boot.index
-outofbag = !inbag 
+outofbag = !inbag
 learn.data = data[inbag]
 val.data = data[outofbag]
 riskRegression:::getSplitMethod("bootcv",B=10,N=17)$index
 }
 NOTE: the number .632 is the expected probability to draw one subject (for example subject 1) with
-   replacement from the data, which does not depend on the sample size:
+replacement from the data, which does not depend on the sample size:
 \code{B=10000}
 \code{N=137}
 \code{mean(sapply(1:B, function(b){match(1,sample(1:N,size=N,replace=TRUE),nomatch=0)}))}
@@ -238,7 +248,7 @@ data = data.frame(id=1:N, y=rbinom(N,1,.3),x=rnorm(N))
 boot.index = sample(1:N,size=M,replace=FALSE)
 boot.index
 inbag = 1:N %in% boot.index
-outofbag = !inbag 
+outofbag = !inbag
 learn.data = data[inbag]
 val.data = data[outofbag]
 riskRegression:::getSplitMethod("bootcv",B=10,N=17,M=.7)$index
@@ -256,7 +266,7 @@ lr1 = glm(Y~X1+X2+X7+X9,data=learndat,family=binomial)
 lr2 = glm(Y~X3+X5,data=learndat,family=binomial)
 Score(list("LR(X1+X2+X7+X9)"=lr1,"LR(X3+X5)"=lr2),formula=Y~1,data=testdat)
 
-## ROC curve and calibration plot 
+## ROC curve and calibration plot
 xb=Score(list("LR(X1+X2+X7+X9)"=lr1,"LR(X3+X5+X6)"=lr2),formula=Y~1,
          data=testdat,plots=c("calibration","ROC"))
 \dontrun{plotROC(xb)
@@ -409,6 +419,10 @@ prediction models based on microarray data. Bioinformatics, 23(14):1768-74,
 Mark A. van de Wiel, Johannes Berkhof, and Wessel N. van Wieringen Testing
 the prediction error difference between 2 predictors Biostatistics (2009)
 10(3): 550-560 doi:10.1093/biostatistics/kxp011
+
+Michael W Kattan and Thomas A Gerds. The index of prediction accuracy: an
+intuitive measure useful for evaluating risk prediction models. Diagnostic
+and Prognostic Research, 2(1):7, 2018.
 }
 \author{
 Thomas A Gerds \email{tag@biostat.ku.dk} and Paul Blanche \email{paul.blanche@univ-ubs.fr}

@@ -52,6 +52,7 @@ p-value are obtained using test inversion method
 }
 \examples{
 library(survival)
+library(data.table)
 
 ## ## generate data ####
 set.seed(10)
@@ -67,6 +68,7 @@ fit <- coxph(Surv(time,event)~X1 + strata(X2) + X6,
 fit.ate <- ate(fit, treatment = "X1", times = 1:3, data = d,
                se = TRUE, iid = TRUE, band = TRUE)
 print(fit.ate, type = "meanRisk")
+dt.ate <- as.data.table(fit.ate)
 
 ## manual calculation of se
 dd <- copy(d)
@@ -75,6 +77,7 @@ out <- predictCox(fit, newdata = dd, se = TRUE, times = 1:3, average.iid = TRUE)
 term1 <- -out$survival.average.iid
 term2 <- sweep(1-out$survival, MARGIN = 2, FUN = "-", STATS = colMeans(1-out$survival))
 sqrt(colSums((term1 + term2/NROW(d))^2)) 
+## fit.ate$meanRisk[treatment=="T0",meanRisk.se]
 
 ## note
 out2 <- predictCox(fit, newdata = dd, se = TRUE, times = 1:3, iid = TRUE)
@@ -82,8 +85,10 @@ mean(out2$survival.iid[,1,1])
 out$survival.average.iid[1,1]
 
 ## check confidence intervals (no transformation)
-fit.ate$meanRisk[, .(lower = meanRisk + qnorm(0.025) * meanRisk.se,
-                     upper = meanRisk + qnorm(0.975) * meanRisk.se)]
+dt.ate[,.(lower = pmax(0,value + qnorm(0.025) * se),
+          lower2 = lower,
+          upper = value + qnorm(0.975) * se,
+          upper2 = upper)]
 
 ## add confidence intervals computed on the log-log scale
 ## and backtransformed
@@ -92,9 +97,9 @@ outCI <- confint(fit.ate,
                  ratioRisk.transform = "log")
 print(outCI, type = "meanRisk")
 
-newse <- fit.ate$meanRisk[, meanRisk.se/(meanRisk*log(meanRisk))]
-fit.ate$meanRisk[, .(lower = exp(-exp(log(-log(meanRisk)) - 1.96 * newse)),
-                     upper = exp(-exp(log(-log(meanRisk)) + 1.96 * newse)))]
+dt.ate[type == "ate", newse := se/(value*log(value))]
+dt.ate[type == "ate", .(lower = exp(-exp(log(-log(value)) - 1.96 * newse)),
+                        upper = exp(-exp(log(-log(value)) + 1.96 * newse)))]
 }
 \author{
 Brice Ozenne

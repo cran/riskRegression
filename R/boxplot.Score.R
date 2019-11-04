@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Aug 15 2016 (09:45) 
 ## Version: 
-## last-updated: Apr 18 2018 (15:13) 
+## last-updated: Oct 19 2019 (18:15) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 117
+##     Update #: 138
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -39,6 +39,8 @@
 #' @param ... not used
 ##' @examples
 ##' # binary outcome
+##' library(data.table)
+##' library(prodlim)
 ##' db=sampleData(40,outcome="binary")
 ##' fitconv=glm(Y~X3+X5,data=db,family=binomial)
 ##' fitnew=glm(Y~X1+X3+X5+X6+X7,data=db,family=binomial)
@@ -100,7 +102,7 @@
 boxplot.Score <- function(x,
                           model,
                           reference,
-                          type,
+                          type="risk",
                           timepoint,
                           overall=1L,
                           lwd=3,
@@ -118,17 +120,17 @@ boxplot.Score <- function(x,
     times=cause=models=NULL
     fitted <- x$models
     models <- names(x$models)
-    if (missing(type)) {
-        if (length(models)==1) 
-            type="risk"
-        else
-            type=ifelse(NROW(x$riskQuantile$contrasts)>0,"diff","risk")
-    }
+    if (missing(type)) { type = "risk"}
+    ## if (length(models)==1) 
+    ## type="risk"
+    ## else
+    ## type=ifelse(NROW(x$riskQuantile$contrasts)>0,"diff","risk")
+    ## }
 
     if (type=="diff"){
-        pframe <- x$riskQuantile$contrasts
+        pframe <- x$riskQuantile$contrasts[model!="Null model"]
     } else{
-        pframe <- x$riskQuantile$score
+        pframe <- x$riskQuantile$score[model!="Null model"]
     }
     if (x$response.type!='binary'){
         if (missing(timepoint))
@@ -138,6 +140,8 @@ boxplot.Score <- function(x,
         pframe <- pframe[times==timepoint]
     }
     if(missing(model)) mod <- pframe[,model[1]] else mod <- model
+    if (!(mod %in% unique(pframe[["model"]])))
+        stop(paste("Requested model ",mod, "not fitted in object."))
     if (type=="diff"){
         if(missing(reference)) ref <- pframe[,reference[1]] else ref <- reference
         pframe <- pframe[model==mod & reference==ref]
@@ -159,9 +163,9 @@ boxplot.Score <- function(x,
                                                     "survival"={paste("Difference in predicted risks\nof an event before time",timepoint)},
                                                     "binary"={"Difference in predicted risks"})
     if (missing(outcome.label)) outcome.label <- switch(x$response.type,
-                                                      "competing.risks"={paste("Event status\nat time",timepoint)},
-                                                      "survival"={paste("Event status\nat time",timepoint)},
-                                                      "binary"={"Event status"})
+                                                        "competing.risks"={paste("Event status\nat time",timepoint)},
+                                                        "survival"={paste("Event status\nat time",timepoint)},
+                                                        "binary"={"Event status"})
     plot.DefaultArgs <- list(x=0,y=0,type = "n",ylim = c(0,length(causes)),xlim = xlim,ylab="",xlab=xlab)
     axis1.DefaultArgs <- list(side=1,
                               las=1,

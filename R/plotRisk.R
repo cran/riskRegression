@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Mar 13 2017 (16:53) 
 ## Version: 
-## Last-Updated: Nov  9 2017 (06:53) 
+## Last-Updated: Oct 13 2019 (10:54) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 35
+##     Update #: 95
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -29,10 +29,13 @@
 ##' @param col colour
 ##' @param pch point type
 ##' @param cex point size
+##' @param preclipse Value between 0 and 1 defining the preclipse area
+##' @param preclipse.shade Logical. If \code{TRUE} shade the area of clinically meaningful change.
 ##' @param ... Used to control the subroutines: plot, axis, lines,
 ##'     barplot, legend. See \code{\link{SmartControl}}.
 ##' @return a nice graph
 ##' @examples
+##' library(prodlim)
 ##' ## uncensored
 ##' learndat = sampleData(40,outcome="binary")
 ##' testdat = sampleData(40,outcome="binary")
@@ -48,9 +51,21 @@
 ##' cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=learndat,x=TRUE)
 ##' cox2 = coxph(Surv(time,event)~X3+X5+X6,data=learndat,x=TRUE)
 ##' xs=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),formula=Surv(time,event)~1,
-##'          data=testdat,summary="risks",null.model=0L)
+##'          data=testdat,summary="risks",null.model=0L,times=c(3,5,6))
 ##' plotRisk(xs,times=5)
-##' 
+##' ## competing risk
+##' \dontrun{
+##' library(prodlim)
+##' library(survival)
+##' set.seed(8)
+##' learndat = sampleData(80,outcome="competing.risk")
+##' testdat = sampleData(140,outcome="competing.risk")
+##' m1 = FGR(Hist(time,event)~X2+X7+X9,data=learndat,cause=1)
+##' m2 = CSC(Hist(time,event)~X2+X7+X9,data=learndat,cause=1)
+##' xcr=Score(list("FGR"=m1,"CSC"=m2),formula=Hist(time,event)~1,
+##'          data=testdat,summary="risks",null.model=0L,times=c(3,5))
+##' plotRisk(xcr,times=1)
+##' }
 ##' @export 
 ##' @author Thomas A. Gerds <tag@@biostat.ku.dk>
 plotRisk <- function(x,
@@ -61,37 +76,102 @@ plotRisk <- function(x,
                      xlab,
                      ylab,
                      col,
-                     pch=1,
+                     pch=3,
                      cex=1,
+                     preclipse=0,
+                     preclipse.shade=FALSE,
                      ...){
-    model=ReSpOnSe=risk=status=NULL
-    if (!is.null(x$null.model))
+    model=ReSpOnSe=risk=status=event=NULL
+    if (is.null(x$risks$score)) stop("No predicted risks in object. You should set summary='risks' when calling Score.")
+    if (!is.null(x$null.model)){
         pframe <- x$risks$score[model!=x$null.model]
-    else
+        pframe[,model:=factor(model)]
+    } else{
         pframe <- x$risks$score
+    }
+    if (x$response.type!="binary"){
+        if (missing(times)){
+            tp <- max(pframe[["times"]])
+            if (length(unique(pframe$times))>1)
+                warning("Time point not specified, use max of the available times: ",tp)
+        } else{ ## can only do one time point
+            tp <- times[[1]]
+            if (!(tp%in%unique(pframe$times)))
+                stop(paste0("Requested time ",times[[1]]," is not in object"))
+        }
+        pframe <- pframe[times==tp]
+    }else tp <- NULL
     if (missing(models)){
-        models <- pframe[,unique(model)[1:2]]
+        models <- pframe[,levels(model)[1:2]]
     }
-    if (is.na(models[2])) stop("Need two models to scatterplot risks")
+    if (is.na(models[2])) stop("Need two models for a scatterplot of predicted risks")
     pframe <- pframe[model%in%models]
-    modelnames <- pframe[,unique(model)]
-    if (x$response.type=="binary")
+    modelnames <- pframe[,levels(model)]
+    if (x$response.type=="binary"){
         R <- pframe[model==modelnames[1],ReSpOnSe]
-    else{
-        warning("Under construction")
-        R <- pframe[model==modelnames[1],status]
     }
-    if (missing(col)) col <- R+1
+    else{
+        if  (x$response.type=="survival"){
+            R <- pframe[model==modelnames[1],
+            {
+                r <- status # 0,1
+                r[time>times] <- 2
+                r
+            }]
+        }else{ ## competing risks
+            R <- pframe[model==modelnames[1],
+            {
+                r <- event # 1,2,3
+                r[time>times] <- 4
+                r-1
+            }]
+        }
+    }
+    ## m1 <- pframe[model==modelnames[1],.(risk,ID)]
+    ## m2 <- pframe[model==modelnames[2],.(risk,ID)]
+    pframe[,model:=factor(model)]
+    m1 <- levels(pframe$model)[[1]]
+    m2 <- levels(pframe$model)[[2]]
     if (missing(xlab)) xlab <- paste0("Risk (%, ",modelnames[1],")")
     if (missing(ylab)) ylab <- paste0("Risk (%, ",modelnames[2],")")
-    m1 <- pframe[model==modelnames[1],risk]
-    m2 <- pframe[model==modelnames[2],risk]
-    # {{{ smart argument control
+    if (x$response.type=="binary"){
+        ppframe <- data.table::dcast(pframe,ID~model,value.var="risk")
+    }else{
+        ppframe <- data.table::dcast(pframe,times+ID~model,value.var="risk")
+    }
+    pred.m1 <- ppframe[[m1]]
+    pred.m2 <- ppframe[[m2]]
+    if (preclipse>0){
+        diff <- abs(pred.m1-pred.m2)
+        which <- diff>quantile(diff,preclipse)
+        message(paste(sprintf("\nShowing absolute differences > %1.2f",
+                              100*quantile(diff,preclipse)),"%"))
+        pred.m1 <- pred.m1[which]
+        pred.m2 <- pred.m2[which]
+        R <- R[which]
+    }
+    if (missing(col)){
+        col <- switch(x$response.type,
+                      "binary"={as.character(factor(R,levels=c(0,1),labels=c("darkgreen","red")))},
+                      "survival"={as.character(factor(R,levels=c(0,1,2),labels=c("darkorange","red","darkgreen")))},
+                      "competing.risks"={as.character(factor(R,levels=c(0,1,2,3),labels=c("darkorange","red","purple","darkgreen")))})
+    }
+                                        # {{{ smart argument control
     plot.DefaultArgs <- list(x=0,y=0,type = "n",ylim = ylim,xlim = xlim,ylab=ylab,xlab=xlab)
     axis1.DefaultArgs <- list(side=1,las=1,at=seq(xlim[1],xlim[2],(xlim[2]-xlim[1])/4))
     axis2.DefaultArgs <- list(side=2,las=2,at=seq(xlim[1],xlim[2],(xlim[2]-xlim[1])/4),mgp=c(4,1,0))
-    legend.DefaultArgs <- list(legend=names(x$models),pch=pch,col=col,cex=cex,bty="n",y.intersp=1.3,x="topleft")
-    points.DefaultArgs <- list(x=m1,y=m2,pch=pch,cex=cex,col=col)
+    this.legend <- switch(x$response.type,"binary"={paste0(c("No event","Event")," (n=",c(sum(R==0),sum(R==1)),")")},
+                          "survival"={paste0(c("Censored","Event","No event")," (n=",c(sum(R==0),sum(R==1),sum(R==2)),")")},
+                          "competing.risks"={paste0(c("Censored","Event","Competing risk","No event")," (n=",c(sum(R==0),sum(R==1),sum(R==2),sum(R==3)),")")})
+    legend.DefaultArgs <- list(legend=this.legend,
+                               pch=pch,
+                               col=switch(x$response.type,"binary"= c("darkgreen","red"),"survival"=c("darkorange","red","darkgreen"),
+                                          "competing.risks"=c("darkorange","red","purple","darkgreen")),
+                               cex=cex,
+                               bty="n",
+                               y.intersp=1.3,
+                               x="topleft")
+    points.DefaultArgs <- list(x=pred.m1,y=pred.m2,pch=pch,cex=cex,col=col)
     abline.DefaultArgs <- list(a=0,b=1,lwd=1,col="gray66")
     control <- prodlim::SmartControl(call= list(...),
                                      keys=c("plot","points","legend","axis1","axis2","abline"),
@@ -105,14 +185,19 @@ plotRisk <- function(x,
                                                    "axis2"=axis2.DefaultArgs),
                                      forced=list("plot"=list(axes=FALSE)),
                                      verbose=TRUE)
-    # }}}
+                                        # }}}
     do.call("plot",control$plot)
+    if (preclipse.shade==TRUE){
+        ## rect(xleft=0,xright=1,ybottom=0,ytop=1,col="white",border=0)
+        plotrix::draw.ellipse(x=0.5,y=.5, a=.75, b=.1, border=0, angle=c(45), lty=3,col="gray88")
+    }
     do.call("abline",control$abline)
     do.call("points",control$points)
     control$axis2$labels <- paste(100*control$axis2$at,"%")
     control$axis1$labels <- paste(100*control$axis1$at,"%")
     do.call("axis",control$axis1)
     do.call("axis",control$axis2)
+    do.call("legend",control$legend)
 }
 
 

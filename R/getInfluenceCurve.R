@@ -83,7 +83,7 @@ getInfluenceCurve.AUC.competing.risks <- function(t,n,time,risk,Cases,Controls1,
     rowSumshtij2 <- rep(0,n) # initialize at 0
     rowSumshtij2[Controls2] <- colSums(htij2)
     hathtstar <- (sum(htij1))/(n*n)  
-    vectTisupt <- n*Controls1/sum(Controls1)
+    vectTisupt <- n*Controls1/nbControls1
     # Integral_0^T_i dMC_k/S for i %in% Cases
     MC.Ti.cases <- MC[sindex(eval.times=time[Cases],jump.times=unique(time)),,drop=FALSE]
     # Integral_0^T_i dMC_k/S for i %in% Controls 2
@@ -198,7 +198,9 @@ getInfluenceCurve.KM <- function(time,status){
     G <- prodlim::prodlim(Hist(time,status)~1,data=dd,reverse=TRUE)
     Stilde.T <- prodlim::predictSurvIndividual(F,lag=1)*prodlim::predictSurvIndividual(G,lag=1)
     Stilde.s <- predict(F,times=lagtime)*predict(G,times=lagtime)
-    out <- lapply(1:N,function(i){((1-status[i])*(time[i]<=times))/Stilde.T[i] - cumsum((time[i]>=times)*(G$hazard*G$n.lost)/Stilde.s)})
+    out <- lapply(1:N,function(i){
+        ((1-status[i])*(time[i]<=times))/Stilde.T[i] - cumsum((time[i]>=times)*(G$hazard*G$n.lost)/Stilde.s)
+    })
     do.call("cbind",out)
 }
 

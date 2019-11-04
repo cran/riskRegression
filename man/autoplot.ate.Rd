@@ -4,11 +4,14 @@
 \alias{autoplot.ate}
 \title{Plot Average Risks}
 \usage{
-\method{autoplot}{ate}(object, ci = FALSE, band = FALSE, plot = TRUE,
-  digits = 2, alpha = NA, ...)
+\method{autoplot}{ate}(object, estimator = object$estimator[1],
+  ci = FALSE, band = FALSE, plot = TRUE, digits = 2, alpha = NA,
+  ...)
 }
 \arguments{
 \item{object}{Object obtained with the function \code{ate}.}
+
+\item{estimator}{[character] The type of estimator relative to which the risks should be displayed.}
 
 \item{ci}{[logical] If \code{TRUE} display the confidence intervals for the average risks.}
 
@@ -29,7 +32,7 @@ Plot average risks.
 \dontrun{
 library(survival)
 library(rms)
-
+library(ggplot2)
 #### simulate data ####
 n <- 1e2
 set.seed(10)
@@ -50,8 +53,8 @@ ateFit <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
 autoplot(ateFit)
 
 outGG <- autoplot(ateFit, band = TRUE, ci = TRUE, alpha = 0.1)
-dd <- as.data.frame(outGG$data[Treatment == 0])
-outGG$plot + facet_wrap(~Treatment, labeller = label_both)
+dd <- as.data.frame(outGG$data[treatment == 0])
+outGG$plot + facet_wrap(~treatment, labeller = label_both)
 }
 }
 \seealso{
