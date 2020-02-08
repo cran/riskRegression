@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: apr 28 2017 (14:19) 
 ## Version: 
-## last-updated: okt 29 2019 (17:52) 
-##           By: Brice Ozenne
-##     Update #: 74
+## last-updated: Jan 27 2020 (07:32) 
+##           By: Thomas Alexander Gerds
+##     Update #: 77
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -33,7 +33,6 @@
 #' \code{\link{ate}} to compute average risks.
 
 ## * autoplot.ate (examples)
-#' @rdname autoplot.ate
 #' @examples
 #' \dontrun{
 #' library(survival)
@@ -56,7 +55,7 @@
 #'               mc.cores=1)
 #'
 #' #### display #### 
-#' autoplot(ateFit)
+#' ggplot2::autoplot(ateFit)
 #' 
 #' outGG <- autoplot(ateFit, band = TRUE, ci = TRUE, alpha = 0.1)
 #' dd <- as.data.frame(outGG$data[treatment == 0])
@@ -122,7 +121,7 @@ autoplot.ate <- function(object,
         print(gg.res$plot)
     }
   
-  return(invisible(gg.res))
+    return(invisible(gg.res))
 }
 
 

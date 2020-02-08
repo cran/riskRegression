@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02) 
 ## Version: 
-## last-updated: Oct 29 2019 (07:00) 
+## last-updated: Feb  4 2020 (07:45) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 288
+##     Update #: 290
 #----------------------------------------------------------------------
 ## 
 ### Commentary:
@@ -343,7 +343,7 @@ predictRisk.lrm <- function(object,newdata,...){
 ##' @rdname predictRisk
 ##' @method predictRisk rpart
 predictRisk.rpart <- function(object,newdata,...){
-  p <- as.numeric(stats::predict(object,newdata=newdata,type="prob")[,2,drop=TRUE])
+  p <- as.numeric(stats::predict(object,newdata=newdata))
   p
 }
 
@@ -1003,7 +1003,7 @@ predictRisk.penfitS3 <- function(object,
 ##' @param fit.formula TODO
 ##' @param ... TODO
 ##' 
-##' @export
+##' # @export
 SmcFcs  <- function(formula,data,m=5,method,fitter="glm",fit.formula,...){
     requireNamespace("smcfcs")
     this <- as.character(formula)

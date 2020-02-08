@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Feb 23 2017 (11:15) 
 ## Version: 
-## last-updated: Oct 13 2019 (18:56) 
+## last-updated: Dec 30 2019 (20:36) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 361
+##     Update #: 371
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -80,8 +80,6 @@
 ##'     object.  Passed to \code{\link{lines}}.
 ##' @param pch Passed to \code{\link{lines}}.
 ##' @param type Passed to \code{\link{lines}}.
-##' @param cause For competing risks models, the cause of failure or
-##'     event of interest
 ##' @param percent If TRUE axes labels are multiplied by 100 and thus
 ##'     interpretable on a percent scale.
 ##' @param na.action what to do with NA values. Passed to
@@ -158,7 +156,6 @@ plotCalibration <- function(x,
                             lty,
                             pch,
                             type,
-                            cause=1,
                             percent=TRUE,
                             na.action=na.fail,
                             cex=1,
@@ -230,8 +227,12 @@ plotCalibration <- function(x,
     if (missing(col)) {
         if (bars)
             col <- c("grey90","grey30")
-        else
-            col <- 1:NF
+        else{
+            cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#CC79A7", "#F0E442")
+            if (NF>length(cbbPalette))
+                col <- 1:NF
+            else col <- cbbPalette[1:NF]
+        }
     }
     if (missing(type)){
         if (method=="quantile"){
@@ -378,21 +379,20 @@ plotCalibration <- function(x,
                        if(x$response.type=="survival"){
                            censcode <- pframe[status==0,status[1]]
                            qfit <- prodlim::prodlim(prodlim::Hist(time,status,cens.code=censcode)~pcut,data=pframe)
-                           cause <- 1
                            plotFrame=data.frame(Pred=tapply(p,pcut,mean),
                                                 Obs=predict(qfit,
                                                             newdata=data.frame(pcut=levels(pcut)),
-                                                            cause=cause,
+                                                            cause=1,
                                                             mode="matrix",
                                                             times=tp,type="cuminc"))
                        }else{
                            censcode <- pframe[status==0,event[1]]
                            qfit <- prodlim::prodlim(prodlim::Hist(time,event,cens.code=censcode)~pcut,data=pframe)
-                           cause <- x$call$cause
+                           n.cause <- match(x$cause,x$states)
                            plotFrame=data.frame(Pred=tapply(p,pcut,mean),
                                                 Obs=predict(qfit,
                                                             newdata=data.frame(pcut=levels(pcut)),
-                                                            cause=cause,
+                                                            cause=n.cause,
                                                             mode="matrix",
                                                             times=tp,type="cuminc"))
                        }
@@ -442,22 +442,21 @@ plotCalibration <- function(x,
                                    if(x$response.type=="survival"){
                                        censcode <- pframe[status==0,status[1]]
                                        pfit <- prodlim::prodlim(prodlim::Hist(time,status,cens.code=censcode)~p,data=pframe,bandwidth=bandwidth)
-                                       cause <- x$call$cause
                                        plotFrame=data.frame(Pred=sort(unique(p)),
                                                             Obs=predict(pfit,
                                                                         newdata=data.frame(p=sort(unique(p))),
-                                                                        cause=cause,
+                                                                        cause=1,
                                                                         mode="matrix",
                                                                         times=tp,type="cuminc"))
                                    }else{
                                        censcode <- pframe[status==0,event[1]]
-                                       pframe[,Event:=factor(event,levels=1:(length(x$states)+1),labels=c(x$states,censcode))]
-                                       pfit <- prodlim::prodlim(prodlim::Hist(time,Event,cens.code=censcode)~p,data=pframe,bandwidth=bandwidth)
-                                       cause <- x$cause
+                                       ## pframe[,Event:=factor(event,levels=1:(length(x$states)+1),labels=c(x$states,censcode))]
+                                       pfit <- prodlim::prodlim(prodlim::Hist(time,event,cens.code=censcode)~p,data=pframe,bandwidth=bandwidth)
+                                       n.cause <- match(x$cause,x$states)
                                        plotFrame=data.frame(Pred=sort(unique(p)),
                                                             Obs=predict(pfit,
                                                                         newdata=data.frame(p=sort(unique(p))),
-                                                                        cause=cause,
+                                                                        cause=n.cause,
                                                                         mode="matrix",
                                                                         times=tp,type="cuminc"))
                                    }
@@ -495,7 +494,6 @@ plotCalibration <- function(x,
     }
     out <- list(plotFrames=plotFrames,
                 times=tp,
-                cause=cause,
                 control=control,
                 legend=legend,
                 bars=bars,

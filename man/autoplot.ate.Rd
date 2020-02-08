@@ -4,9 +4,16 @@
 \alias{autoplot.ate}
 \title{Plot Average Risks}
 \usage{
-\method{autoplot}{ate}(object, estimator = object$estimator[1],
-  ci = FALSE, band = FALSE, plot = TRUE, digits = 2, alpha = NA,
-  ...)
+\method{autoplot}{ate}(
+  object,
+  estimator = object$estimator[1],
+  ci = FALSE,
+  band = FALSE,
+  plot = TRUE,
+  digits = 2,
+  alpha = NA,
+  ...
+)
 }
 \arguments{
 \item{object}{Object obtained with the function \code{ate}.}
@@ -50,7 +57,7 @@ ateFit <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
               mc.cores=1)
 
 #### display #### 
-autoplot(ateFit)
+ggplot2::autoplot(ateFit)
 
 outGG <- autoplot(ateFit, band = TRUE, ci = TRUE, alpha = 0.1)
 dd <- as.data.frame(outGG$data[treatment == 0])

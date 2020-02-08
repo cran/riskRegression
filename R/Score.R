@@ -431,7 +431,7 @@ Score.list <- function(object,
         cens.model <- censModel
     }
 
-    se.conservative=IF.AUC.conservative=IF.AUC0=IF.AUC=IC0=Brier=AUC=casecontrol=se=nth.times=time=status=ID=WTi=risk=IF.Brier=lower=upper=crossval=b=time=status=model=reference=p=model=pseudovalue=ReSpOnSe=residuals=event=j=NULL
+    se.conservative=IPCW=IF.AUC.conservative=IF.AUC0=IF.AUC=IC0=Brier=AUC=casecontrol=se=nth.times=time=status=ID=WTi=risk=IF.Brier=lower=upper=crossval=b=time=status=model=reference=p=model=pseudovalue=ReSpOnSe=residuals=event=j=NULL
 
     # }}}
     theCall <- match.call()
@@ -574,7 +574,10 @@ Score.list <- function(object,
     rm(response)
     # }}}
     # {{{ SplitMethod & parallel stuff
-    if (!missing(seed)) set.seed(seed)
+    if (!missing(seed)) {
+        ## message("Random seed set to control split of data: seed=",seed)
+        set.seed(seed)
+    }
     split.method <- getSplitMethod(split.method=split.method,B=B,N=N,M=M)
     B <- split.method$B
     splitIndex <- split.method$index
@@ -712,6 +715,8 @@ Score.list <- function(object,
     }else{
         alpha <- NA
     }
+    # allow user to write contrasts=0 instead of contrasts=FALSE
+    if (length(contrasts)==1 && length(contrasts[[1]])==1 && contrasts==0) contrasts = FALSE
     if ((NF+length(nullobject))<=1) dolist <- NULL
     else{
         if ((is.logical(contrasts) && contrasts[1]==FALSE)){
@@ -726,7 +731,10 @@ Score.list <- function(object,
             }else{
                 dolist <- contrasts
                 if (!is.list(contrasts)) contrasts <- list(contrasts)
-                if (!(all(sapply(dolist,function(x){all(x<=NF) && all(x>=0)}))))
+                if (!(all(sapply(dolist,function(x){
+                    if (!(length(x)>1)) stop("All elements of the list contrasts must contain at least two elements, i.e., the two models to be compared.")
+                    all(x<=NF) && all(x>=0)
+                }))))
                     stop(paste("Argument contrasts should be a list of positive integers possibly mixed with 0 that refer to elements of object.\nThe object has ",NF,"elements but "))
             }
         }
@@ -880,10 +888,14 @@ Score.list <- function(object,
             if (f[1]!=0 && any(c("integer","factor","numeric","matrix") %in% object.classes[[f]])){
                 ## sort predictions by ID
                 if (!is.null(dim(object[[f]]))) {## input matrix
-                    if(!is.null(include.times)){ ## remove columns at times beyond max time
-                        p <- c(do.call("predictRisk",c(list(object=object[[f]][,include.times,drop=FALSE]),args))[neworder,])
-                    } else{
-                        p <- c(do.call("predictRisk",c(list(object=object[[f]]),args))[neworder,])
+                    if (response.type=="binary"){
+                        p <- do.call("predictRisk", c(list(object=c(object[[f]])),args))[neworder]
+                    }else{
+                        if(!is.null(include.times)){ ## remove columns at times beyond max time
+                            p <- c(do.call("predictRisk",c(list(object=object[[f]][,include.times,drop=FALSE]),args))[neworder,])
+                        } else{
+                            p <- c(do.call("predictRisk",c(list(object=object[[f]]),args))[neworder,])
+                        }
                     }
                 }
                 else{ ## either binary or only one time point
@@ -1427,6 +1439,7 @@ Score.list <- function(object,
                                                                        se.fit=TRUE)]
                             }
                         }
+                        setnames(contrasts.AUC,"delta","delta.AUC")
                         output <- c(output,list(contrasts=contrasts.AUC))
                     }
                     if (!is.null(output$score)){
@@ -1589,7 +1602,14 @@ Score.list <- function(object,
                     }
                     if (keep.residuals) {
                         DT.B[,model:=factor(model,levels=mlevs,mlabels)]
-                        output <- c(output,list(residuals=DT.B[,c("ID",names(response),"model","times","risk","residuals"),with=FALSE]))
+                        if (all(c("Wt","WTi")%in%names(DT.B))){
+                            DT.B[,IPCW:=1/WTi]
+                            DT.B[time>=times,IPCW:=1/Wt]
+                            DT.B[time<times & status==0,IPCW:=0]
+                            output <- c(output,list(residuals=DT.B[,c("ID",names(response),"model","times","risk","residuals","IPCW"),with=FALSE]))
+                        }else{
+                            output <- c(output,list(residuals=DT.B[,c("ID",names(response),"model","times","risk","residuals"),with=FALSE]))
+                        }
                     }
                     if (!is.null(output$score)){
                         output$score[,model:=factor(model,levels=mlevs,mlabels)]
@@ -1792,6 +1812,7 @@ Score.list <- function(object,
                             censoringHandling=cens.method,
                             split.method=split.method,
                             metrics=metrics,
+                            times=times,
                             alpha=alpha,
                             plots=plots,
                             summary=summary,
@@ -1889,7 +1910,7 @@ Brier.binary <- function(DT,
 }
 
 Brier.survival <- function(DT,MC,se.fit,conservative,cens.model,keep.vcov=FALSE,multi.split.test,alpha,N,NT,NF,dolist,keep.residuals=FALSE,...){
-    IC0=nth.times=ID=time=times=raw.Residuals=risk=Brier=residuals=WTi=Wt=status=setorder=model=IF.Brier=data.table=sd=lower=qnorm=se=upper=NULL
+    IC0=IPCW=nth.times=ID=time=times=raw.Residuals=risk=Brier=residuals=WTi=Wt=status=setorder=model=IF.Brier=data.table=sd=lower=qnorm=se=upper=NULL
     ## compute 0/1 outcome:
     DT[time<=times & status==1,residuals:=(1-risk)^2/WTi]
     DT[time<=times & status==0,residuals:=0]
@@ -1964,7 +1985,14 @@ Brier.survival <- function(DT,MC,se.fit,conservative,cens.model,keep.vcov=FALSE,
         output <- c(output,list(vcov=getVcov(DT,"IF.Brier",times=TRUE)))
     }
     if (keep.residuals) {
-        output <- c(output,list(residuals=DT[,c("ID","time","status","model","times","risk","residuals"),with=FALSE]))
+        if (all(c("Wt","WTi")%in%names(DT))){
+            DT[,IPCW:=1/WTi]
+            DT[time>=times,IPCW:=1/Wt]
+            DT[time<times & status==0,IPCW:=0]
+            output <- c(output,list(residuals=DT[,c("ID","time","status","model","times","risk","residuals","IPCW"),with=FALSE]))
+        }else{
+            output <- c(output,list(residuals=DT[,c("ID","time","status","model","times","risk","residuals"),with=FALSE]))
+        }
     }
     output
 }
@@ -2140,13 +2168,15 @@ delongtest <-  function(risk,
         }
         if (se.fit[[1]]==TRUE||multi.split.test[[1]]==TRUE){
             deltaAUC <- data.table(model,reference,delta.AUC=as.vector(delta.AUC),se)
-            deltaAUC[,p:=2*pnorm(abs(delta.AUC)/se,lower.tail=FALSE)]
         }else{
             deltaAUC <- data.table(model,reference,delta.AUC=as.vector(delta.AUC))
         }
         if (se.fit==TRUE){
             deltaAUC[,lower:=delta.AUC-Qnorm*se]
             deltaAUC[,upper:=delta.AUC+Qnorm*se]
+        }
+        if (se.fit[[1]]==TRUE||multi.split.test[[1]]==TRUE){
+            deltaAUC[,p:=2*pnorm(abs(delta.AUC)/se,lower.tail=FALSE)]
         }
         out <- list(score = score, contrasts = deltaAUC)
     }else{

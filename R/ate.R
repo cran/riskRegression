@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Oct 23 2016 (08:53) 
 ## Version: 
-## last-updated: okt 30 2019 (09:48) 
-##           By: Brice Ozenne
-##     Update #: 1625
+## last-updated: Jan  6 2020 (08:58) 
+##           By: Thomas Alexander Gerds
+##     Update #: 1627
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -18,7 +18,7 @@
 ## * ate (documentation)
 #' @title Compute the Average Treatment Effects Via 
 #' @description Use the g-formula/IPTW/double robust estimator to estimate the average treatment
-#'     effect based on Cox regression with or without competing ryisks.
+#'     effect based on Cox regression with or without competing risks.
 #' @name ate
 #' 
 #' @param event Outcome model which describes how event risk depends
@@ -79,7 +79,6 @@
 #' \code{\link{autoplot.ate}} to display the average risk.
 
 ## * ate (examples)
-#' @rdname ate
 #' @examples 
 #' library(survival)
 #' library(rms)
