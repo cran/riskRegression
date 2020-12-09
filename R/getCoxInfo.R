@@ -188,16 +188,25 @@ coxModelFrame <- function(object, center){
 coxModelFrame.coxph <- function(object, center = FALSE){
 
     default.start <- 0
-  
-    if("x" %in% names(object) == FALSE){
-        stop("invalid object \n",
-             "set x=TRUE in the call to ",class(object)[1]," \n")
-    }
-  
+    
     if("y" %in% names(object) == FALSE){
         stop("invalid object \n",
              "set y=TRUE in the call to ",class(object)[1]," \n")
     }
+    
+    if("x" %in% names(object) == FALSE){
+        rhs.formula <- update(formula(object),"0~.")
+        if(length(all.vars(rhs.formula))==0 || (!is.null(object$nevent) && object$nevent==0)){
+            ## name.var <- setdiff(all.vars(object$terms), unlist(SurvResponseVar(coxFormula(object))[-1]))
+            name.var <- names(object$coef)
+            object$x <- matrix(0, nrow = NROW(object$y), ncol = length(name.var),
+                               dimnames = list(NULL, name.var))
+        }else{
+            stop("invalid object \n",
+                 "set x=TRUE in the call to ",class(object)[1]," \n")
+        }
+    }
+ 
 
     ## ** add x
     if(NCOL(object[["x"]])!=0){
@@ -212,7 +221,7 @@ coxModelFrame.coxph <- function(object, center = FALSE){
     if("strata" %in% names(dt)){
         stop("The variables in the linear predictor should be named \"strata\" \n")
     }
-    
+
     ## ** add y
     if(is.null(dt)){
         dt <- data.table(status = object[["y"]][,"status"])
@@ -320,7 +329,16 @@ coxFormula.cph <- function(object){
 #' @method coxFormula coxph
 #' @export
 coxFormula.coxph <- function(object){
-  return(object$formula)
+    if(object$nevent>0){
+        return(object$formula)
+    }else{
+        out <- object$terms
+        extra.attr <- names(attributes(out))
+        for(iAttr in extra.attr){
+            attr(out, iAttr) <- NULL
+        }
+        return(as.formula(out))
+    }
 }
 
 ## ** coxFormula.phreg
@@ -367,30 +385,31 @@ coxLP <- function(object, data, center){
 #' @export
 coxLP.cph <- function(object, data, center){
   
-  coef <- stats::coef(object)
-  n.varLP <- length(coef)
-  
-  if(is.null(data)){ ## training dataset
+    coef <- stats::coef(object)
+    n.varLP <- length(coef)
+
+    if(n.varLP==0){
+        if(is.null(data)){
+            Xb <- rep(0, coxN(object))
+        }else{
+            Xb <- rep(0, NROW(data))
+        }
+    }else if(is.null(data)){ ## training dataset
     
-    Xb <- object$linear.predictors
+        Xb <- object$linear.predictors
     
-    if(center[[1]] == FALSE && n.varLP != 0){
-      Xb <- Xb + sum(coxCenter(object)*coef)
-    }
+        if(center[[1]] == FALSE && n.varLP != 0){
+            Xb <- Xb + sum(coxCenter(object)*coef)
+        }
     
-  }else{ ## new dataset
-    
-    if(n.varLP>0){
+    }else{ ## new dataset
       
-      Xb <- stats::predict(object, newdata = as.data.frame(data), type = "lp")
+        Xb <- stats::predict(object, newdata = as.data.frame(data), type = "lp")
       
       if(center == FALSE){
         Xb <- Xb + sum(coxCenter(object)*coef)
       }
       
-    }else{ 
-      Xb <- rep(0, NROW(data)) 
-    } 
   }
   
   return(unname(Xb))
@@ -515,7 +534,7 @@ coxN <- function(object){
 #' @method coxN cph
 #' @export
 coxN.cph <- function(object){
-  return(sum(object$n))
+    return(sum(object$n))
 }
 
 ## ** coxN.coxph

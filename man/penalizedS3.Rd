@@ -29,14 +29,15 @@ S3-wrapper for S4 function penalized
 library(prodlim)
 \dontrun{
 ## too slow
+if (requireNamespace("penalized",quietly=TRUE)){
 library(penalized)
 set.seed(8)
 d <- sampleData(200,outcome="binary")
 newd <- sampleData(80,outcome="binary")
 fitridge <- penalizedS3(Y~X1+X2+pen(7:8), data=d, type="ridge",
-standardize=TRUE, model="logistic",trace=FALSE)
+                standardize=TRUE, model="logistic",trace=FALSE)
 fitlasso <- penalizedS3(Y~X1+X2+pen(7:8), data=d, type="lasso",
-standardize=TRUE, model="logistic",trace=FALSE)
+                standardize=TRUE, model="logistic",trace=FALSE)
 # fitnet <- penalizedS3(Y~X1+X2+pen(7:8), data=d, type="elastic.net",
 # standardize=TRUE, model="logistic",trace=FALSE)
 predictRisk(fitridge,newdata=newd)
@@ -44,12 +45,11 @@ predictRisk(fitlasso,newdata=newd)
 # predictRisk(fitnet,newdata=newd)
 Score(list(fitridge),data=newd,formula=Y~1)
 Score(list(fitridge),data=newd,formula=Y~1,split.method="bootcv",B=2)
-}
-\dontrun{ data(nki70) ## S4 fit
-pen <- penalized(Surv(time, event), penalized = nki70[,8:77],
+data(nki70) ## S4 fit
+fitS4 <- penalized(Surv(time, event), penalized = nki70[,8:77],
                  unpenalized = ~ER+Age+Diam+N+Grade, data = nki70,
-lambda1 = 1)
-penS3 <- penalizedS3(Surv(time,event)~ER+Age+Diam+pen(8:77)+N+Grade,
+                 lambda1 = 1)
+fitS3 <- penalizedS3(Surv(time,event)~ER+Age+Diam+pen(8:77)+N+Grade,
                      data=nki70, lambda1=1)
 ## or
 penS3 <- penalizedS3(Surv(time,event)~ER+pen(TSPYL5,Contig63649_RC)+pen(10:77)+N+Grade,
@@ -57,5 +57,5 @@ penS3 <- penalizedS3(Surv(time,event)~ER+pen(TSPYL5,Contig63649_RC)+pen(10:77)+N
 ## also this works
 penS3 <- penalizedS3(Surv(time,event)~ER+Age+pen(8:33)+Diam+pen(34:77)+N+Grade,
                     data=nki70, lambda1=1)
-}
+}}
 }

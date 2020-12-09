@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Mar  3 2017 (09:28) 
 ## Version: 
-## Last-Updated: Jan 29 2019 (10:49) 
-##           By: Thomas Alexander Gerds
-##     Update #: 103
+## Last-Updated: nov 26 2020 (18:53) 
+##           By: Brice Ozenne
+##     Update #: 151
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -31,25 +31,26 @@
 #' @export
 as.data.table.predictCox <- function(x, keep.rownames = FALSE, se = TRUE,...){
     times=NULL
-
+    
     n.obs <- NROW(x[[x$type[1]]])
-    nd <- data.table(observation = 1:n.obs)
-    if (!is.null(x$newdata)){
-        nd <- cbind(nd, x$newdata)
+    if (!is.null(x$status)){
+        nd <- x$status[,.SD,.SDcols = c("nevent","strata")]
+    }else if(x$baseline){
+        nd <- data.table::data.table(observation = 1:n.obs, strata = x$strata)
+    }else{
+        nd <- data.table::data.table(observation = 1:n.obs, x$newdata, strata = x$strata)
     }
+    
     if(is.null(x$times)){
         stop("Cannot convert to a data.table object when times is missing in object \n",
              "set the argument \'keep.time\' to TRUE when calling the predict method \n")
     }
-
     if(!is.matrix(x[[x$type[1]]])){ ## baseline hazard
-        if(!is.null(x$strata)){
-            out <- as.data.table(x[c("times","strata",x$type)])
-        }else{
-            out <- as.data.table(x[c("times",x$type)])
+        out <- as.data.table(x[c("times",x$type)])
+        if (!is.null(nd)){
+            out <- cbind(nd,out)
         }
     }else{
-
         if(x$diag){
             n.times <- 1
         }else{
@@ -62,8 +63,6 @@ as.data.table.predictCox <- function(x, keep.rownames = FALSE, se = TRUE,...){
             }else{
                 nd[,times:=x$times[[tt]]]
             }
-            if (!is.null(x$strata))
-                nd[,strata:=x$strata]
             for (name in x$type){
                 tyc <- cbind(x[[name]][,tt])
                 colnames(tyc) <- name

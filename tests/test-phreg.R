@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: feb 28 2017 (09:52) 
 ## Version: 
-## last-updated: Oct  4 2018 (10:12) 
+## last-updated: Dec  7 2020 (09:23) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 19
+##     Update #: 22
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -16,10 +16,8 @@
 ### Code:
 
 ## * Settings
-if (class(try(riskRegression.test,silent=TRUE))[1]!="try-error"){
 library(testthat)
 library(riskRegression)
-library(pec)
 library(rms)
 library(survival)
 library(prodlim)
@@ -123,6 +121,5 @@ test_that("competing risk - several strata variables", {
     expect_equal(predS.phreg,predS.coxph, tol = 1e-3)
 
 })
-}
 ##----------------------------------------------------------------------
 ### test-phreg.R ends here

@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: maj 18 2017 (09:23) 
 ## Version: 
-## last-updated: okt  7 2019 (16:07) 
+## last-updated: okt 30 2020 (14:19) 
 ##           By: Brice Ozenne
-##     Update #: 115
+##     Update #: 121
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -18,8 +18,8 @@
 ### Code:
 
 ## * Settings
-library(testthat)
 library(riskRegression)
+library(testthat)
 library(survival)
 library(rms)
 library(timereg)
@@ -140,7 +140,7 @@ test_that("[iidCox] empty strata", {
 
 ## * Compare to timereg
 ## ** Data
-data(Melanoma)
+data(Melanoma, package = "riskRegression")
 
 set.seed(10)
 dt <- sampleData(5e1, outcome = "survival")[,.(time,event,X1,X2,X6)]
@@ -188,24 +188,20 @@ IF.coxph_sort <- iidCox(e.coxph_sort, keep.times = FALSE, store.iid = "full", re
 ## and then compute the IF for the survival
 IFminimal.coxph <- iidCox(e.coxph, keep.times = FALSE, store.iid = "minimal", return.object = FALSE)
 ## same as before but using an approximation
-IFapprox.coxph <- iidCox(e.coxph, keep.times = FALSE, store.iid = "approx", return.object = FALSE)
 
 IFlambda_GS <- t(as.data.table(e.timereg$B.iid))
-IFlambda_GSapprox <- t(as.data.table(eApprox.timereg$B.iid))
  
 ## *** Tests
 test_that("[iidCox] beta - no strata, no interaction, continuous",{
     expect_equal(unname(IF.coxph$IFbeta),e.timereg$gamma.iid)
     expect_equal(unname(IF.coxph$IFbeta[order(dt$time),]),unname(IF.coxph_sort$IFbeta))
     expect_equal(unname(IFminimal.coxph$IFbeta),e.timereg$gamma.iid)
-    expect_equal(unname(IFapprox.coxph$IFbeta),eApprox.timereg$gamma.iid)
 })
 
 test_that("[iidCox] lambda - no strata, no interaction, continuous",{
     expect_equal(as.double(IF.coxph$IFcumhazard[[1]]), as.double(IFlambda_GS[,-1]))
     expect_equal(IF.coxph$IFcumhazard[[1]][order(dt$time),], IF.coxph_sort$IFcumhazard[[1]])
     expect_equal(IFminimal.coxph$IFcumhazard[[1]], NULL)
-    expect_equal(as.double(IFapprox.coxph$IFcumhazard[[1]]), as.double(IFlambda_GSapprox[,-1]))
 })
   
 
@@ -342,8 +338,8 @@ test_that("[iidCox] Compare to timereg on Melanoma dta",{
     timereg.iidLambda <- t(as.data.table(e.timereg$B.iid))
 
     expect_equal(unname(RR.iid$IFbeta),e.timereg$gamma.iid)
-    expect_equal(as.double(RR.iid$IFcumhazard[[1]]),
-                 as.double(timereg.iidLambda[,-1]))
+    expect_equal(as.double(RR.iid$IFcumhazard[[1]]), ## as.double(RR.iid$IFcumhazard[[1]])[c(1:4,206:209,411)]
+                 as.double(timereg.iidLambda[,-1])) ## as.double(timereg.iidLambda[,-1])[c(1:4,206:209,411)]
 })
 
 #----------------------------------------------------------------------

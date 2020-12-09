@@ -5,6 +5,7 @@
 ##' @return list with two elements: ctree and call
 ##' @seealso Cforest
 ##' @examples
+##' if (requireNamespace("party",quietly=TRUE)){
 ##' library(prodlim)
 ##' library(party)
 ##' library(survival)
@@ -13,6 +14,8 @@
 ##' nd <- data.frame(X1=c(0,1,0),X2=c(-1,0,1))
 ##' f <- Ctree(Surv(time,status)~X1+X2,data=d)
 ##' predictRisk(f,newdata=nd,times=c(3,8))
+##' }
+##' 
 ##' 
 ##' @author Thomas A. Gerds <tag@@biostat.ku.dk>
 ##' @export 
@@ -68,11 +71,16 @@ Cforest <- function(formula,data,...){
 ##' @export 
 predictRisk.Cforest <- function (object, newdata, times, ...) {
     requireNamespace("party")
-    survObj <- party::treeresponse(object$forest,newdata=newdata)
-    p <- do.call("rbind",lapply(survObj,function(x){
-        predictRisk(x,newdata=newdata[1,,drop=FALSE],times=times)
-    }))
-    if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)) 
-        stop(paste("\nPrediction matrix has wrong dimension:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
-    p
+    if (missing(times)||is.null(times)){
+        p <- as.numeric(unlist(party::treeresponse(object$forest,newdata=newdata)))
+        return(p)
+    }else{
+        survObj <- party::treeresponse(object$forest,newdata=newdata)
+        p <- do.call("rbind",lapply(survObj,function(x){
+            predictRisk(x,newdata=newdata[1,,drop=FALSE],times=times)
+        }))
+        if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)) 
+            stop(paste("\nPrediction matrix has wrong dimension:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
+        p
+    }
 }

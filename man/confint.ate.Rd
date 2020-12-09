@@ -8,11 +8,18 @@
   object,
   parm = NULL,
   level = 0.95,
-  nsim.band = 10000,
+  n.sim = 10000,
+  contrasts = object$contrasts,
+  allContrasts = object$allContrasts,
   meanRisk.transform = "none",
   diffRisk.transform = "none",
   ratioRisk.transform = "none",
   seed = NA,
+  ci = object$inference$se,
+  band = object$inference$band,
+  p.value = TRUE,
+  method.band = "maxT-simulation",
+  alternative = "two.sided",
   bootci.method = "perc",
   ...
 )
@@ -24,7 +31,11 @@
 
 \item{level}{[numeric, 0-1] Level of confidence.}
 
-\item{nsim.band}{[integer, >0]the number of simulations used to compute the quantiles for the confidence bands.}
+\item{n.sim}{[integer, >0] the number of simulations used to compute the quantiles for the confidence bands and/or perform adjustment for multiple comparisons.}
+
+\item{contrasts}{[character vector] levels of the treatment variable for which the risks should be assessed and compared. Default is to consider all levels.}
+
+\item{allContrasts}{[2-row character matrix] levels of the treatment variable to be compared. Default is to consider all pairwise comparisons.}
 
 \item{meanRisk.transform}{[character] the transformation used to improve coverage
 of the confidence intervals for the mean risk in small samples.
@@ -41,6 +52,19 @@ Can be \code{"none"}, \code{"log"}.}
 \item{seed}{[integer, >0] seed number set when performing simulation for the confidence bands.
 If not given or NA no seed is set.}
 
+\item{ci}{[logical] should the confidence intervals be computed?}
+
+\item{band}{[logical] should the confidence bands be computed?}
+
+\item{p.value}{[logical] should the p-values/adjusted p-values be computed?
+Requires argument \code{ci} and/or \code{band} to be \code{TRUE}.}
+
+\item{method.band}{[character] method used to adjust for multiple comparisons.
+Can be any element of \code{p.adjust.methods} (e.g. \code{"holm"}), \code{"maxT-integration"}, or \code{"maxT-simulation"}.}
+
+\item{alternative}{[character] a character string specifying the alternative hypothesis,
+must be one of \code{"two.sided"} (default), \code{"greater"} or \code{"less"}.}
+
 \item{bootci.method}{[character] Method for constructing bootstrap confidence intervals.
 Either "perc" (the default), "norm", "basic", "stud", or "bca".}
 
@@ -50,10 +74,13 @@ Either "perc" (the default), "norm", "basic", "stud", or "bca".}
 Confidence intervals and confidence Bands for the predicted absolute risk (cumulative incidence function).
 }
 \details{
-Confidence bands and confidence intervals computed via the influence function
-are automatically restricted to the interval [0;1]. \cr \cr
+Argument \code{ci}, \code{band}, \code{p.value}, \code{method.band}, \code{alternative}, \code{meanRisk.transform}, \code{diffRisk.transform}, \code{ratioRisk.transform} are only active when the \code{ate} object contains the influence function.
+Argument \code{bootci.method} is only active when the \code{ate} object contains bootstrap samples.
 
-Confidence intervals obtained via bootstrap are computed
+\strong{Influence function}: confidence bands and confidence intervals computed via the influence function are automatically restricted to the interval of definition of the parameter (e.g. [0;1] for the average risk).
+Single step max adjustment for multiple comparisons, i.e. accounting for the correlation between the test statistics but not for the ordering of the tests, can be performed setting the arguemnt \code{method.band} to \code{"maxT-integration"} or \code{"maxT-simulation"}. The former uses numerical integration (\code{pmvnorm} and \code{qmvnorm} to perform the adjustment while the latter using simulation. Both assume that the test statistics are jointly normally distributed.
+
+\strong{Bootstrap}: confidence intervals obtained via bootstrap are computed
 using the \code{boot.ci} function of the \code{boot} package.
 p-value are obtained using test inversion method
 (finding the smallest confidence level such that the interval contain the null hypothesis).
@@ -75,7 +102,7 @@ fit <- coxph(Surv(time,event)~X1 + strata(X2) + X6,
 #### average treatment effect ####
 fit.ate <- ate(fit, treatment = "X1", times = 1:3, data = d,
                se = TRUE, iid = TRUE, band = TRUE)
-print(fit.ate, type = "meanRisk")
+summary(fit.ate)
 dt.ate <- as.data.table(fit.ate)
 
 ## manual calculation of se
@@ -85,17 +112,17 @@ out <- predictCox(fit, newdata = dd, se = TRUE, times = 1:3, average.iid = TRUE)
 term1 <- -out$survival.average.iid
 term2 <- sweep(1-out$survival, MARGIN = 2, FUN = "-", STATS = colMeans(1-out$survival))
 sqrt(colSums((term1 + term2/NROW(d))^2)) 
-## fit.ate$meanRisk[treatment=="T0",meanRisk.se]
+## fit.ate$meanRisk[treatment=="T0",se]
 
 ## note
 out2 <- predictCox(fit, newdata = dd, se = TRUE, times = 1:3, iid = TRUE)
-mean(out2$survival.iid[,1,1])
+mean(out2$survival.iid[1,1,])
 out$survival.average.iid[1,1]
 
 ## check confidence intervals (no transformation)
-dt.ate[,.(lower = pmax(0,value + qnorm(0.025) * se),
+dt.ate[,.(lower = pmax(0,estimate + qnorm(0.025) * se),
           lower2 = lower,
-          upper = value + qnorm(0.975) * se,
+          upper = estimate + qnorm(0.975) * se,
           upper2 = upper)]
 
 ## add confidence intervals computed on the log-log scale
@@ -103,11 +130,11 @@ dt.ate[,.(lower = pmax(0,value + qnorm(0.025) * se),
 outCI <- confint(fit.ate,
                  meanRisk.transform = "loglog", diffRisk.transform = "atanh",
                  ratioRisk.transform = "log")
-print(outCI, type = "meanRisk")
+summary(outCI, type = "risk", short = TRUE)
 
-dt.ate[type == "ate", newse := se/(value*log(value))]
-dt.ate[type == "ate", .(lower = exp(-exp(log(-log(value)) - 1.96 * newse)),
-                        upper = exp(-exp(log(-log(value)) + 1.96 * newse)))]
+dt.ate[type == "meanRisk", newse := se/(estimate*log(estimate))]
+dt.ate[type == "meanRisk", .(lower = exp(-exp(log(-log(estimate)) - 1.96 * newse)),
+                        upper = exp(-exp(log(-log(estimate)) + 1.96 * newse)))]
 }
 \author{
 Brice Ozenne

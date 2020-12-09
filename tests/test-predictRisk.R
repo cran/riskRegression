@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Aug 10 2017 (08:56) 
 ## Version: 
-## Last-Updated: okt  7 2019 (18:48) 
-##           By: Brice Ozenne
-##     Update #: 28
+## Last-Updated: Dec  5 2020 (13:20) 
+##           By: Thomas Alexander Gerds
+##     Update #: 33
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -17,36 +17,41 @@
 library(riskRegression)
 library(testthat)
 library(rms)
-library(SuperLearner)
 library(survival)
-library(randomForestSRC)
-library(ggplot2)
 library(data.table)
 library(lava)
 
 ## * SuperLearner
 cat("[predictRisk.SuperPredictor] \n")
-
 test_that("wrap the SuperLearner", {
-    d <- sampleData(139,outcome="binary")
-    sl = SuperLearner(Y = d$Y,
-                      X = d[,c("X1","X2","X3","X4","X5","X6","X7","X8","X9","X10"),with=0L],
-                      family = binomial(),
-                      SL.library = "SL.glm")
+    if (!requireNamespace("SuperLearner",quietly=TRUE)){
+        message("Package SuperLearner not installed. Skip this test.")
+    }else{
+        library(SuperLearner)
+        d <- sampleData(139,outcome="binary")
+        sl = SuperLearner(Y = d$Y,
+                          X = d[,c("X1","X2","X3","X4","X5","X6","X7","X8","X9","X10"),with=0L],
+                          family = binomial(),
+                          SL.library = "SL.glm")
+    }
 })
 
 ## * rfsrc
 cat("[predictRisk.rfsrc]  \n")
 test_that("Additional arguments: example with imputation of missing data", {
-    data(pbc,package="survival")
-    set.seed(10)
-    forest <- rfsrc(Surv(time,status)~chol+age+sex,data=pbc,ntree=10,nsplit=10)
-    ## no specification
-    expect_error(Score(list(forest),formula=Hist(time,status)~1,data=pbc,conf.int=FALSE,metrics="brier",cens.model="km"))
-    ## correct specification
-    expect_output(print(Score(list(forest),formula=Hist(time,status)~1,data=pbc,conf.int=FALSE,metrics="brier",cens.model="km",predictRisk.args=list("rfsrc"=list(na.action="na.impute")))))
-    ## wrong specification
-    expect_error(print(Score(list(forest),formula=Hist(time,status)~1,data=pbc,conf.int=FALSE,metrics="brier",cens.model="km",predictRisk.args=list("randomForestSRC"=list(na.action="na.impute")))))
+    if (!requireNamespace("randomForestSRC",quietly=TRUE)){
+        message("Package randomForestSRC not installed. Skip this test.")
+    }else{
+        data(pbc,package="survival")
+        set.seed(10)
+        forest <- rfsrc(Surv(time,status)~chol+age+sex,data=pbc,ntree=10,nsplit=10)
+        ## no specification
+        expect_error(Score(list(forest),formula=Hist(time,status)~1,data=pbc,conf.int=FALSE,metrics="brier",cens.model="km"))
+        ## correct specification
+        expect_output(print(Score(list(forest),formula=Hist(time,status)~1,data=pbc,conf.int=FALSE,metrics="brier",cens.model="km",predictRisk.args=list("rfsrc"=list(na.action="na.impute")))))
+        ## wrong specification
+        expect_error(print(Score(list(forest),formula=Hist(time,status)~1,data=pbc,conf.int=FALSE,metrics="brier",cens.model="km",predictRisk.args=list("randomForestSRC"=list(na.action="na.impute")))))
+    }
 })
 
 ## * predictCox/predictCSC - to be reorganized (there is no clear test in this section)
@@ -85,7 +90,7 @@ test_that("Prediction with CSC - categorical cause",{
     predictRisk(CSC.h$models[[1]], newdata = dn, times = c(5,10,15,20), cause = cause)
     predictRisk(CSC.s$models[[1]], newdata = dn, times = c(5,10,15,20), cause = cause)
     predictRisk(CSC.h$models[[2]], newdata = dn, times = c(5,10,15,20), cause = cause)
-    predictRisk(CSC.s$models[[2]], newdata = dn, times = c(5,10,15,20), cause = cause)
+    expect_success(predictRisk(CSC.s$models[[2]], newdata = dn, times = c(5,10,15,20), cause = cause))
 })
 
 ## * [predictRisk.glm] vs. lava
@@ -114,7 +119,7 @@ test_that("[predictRisk.glm] compare to lava",{
     expect_equal(unname(e.RR), unname(e.lava$coef))
 
     ## check variance
-    expect_equal(unname(tcrossprod(e.RR.iid)), unname(e.lava$vcov))
+    expect_equal(unname(crossprod(e.RR.iid)), unname(e.lava$vcov))
 })
 
 ## ** average.iid 
@@ -137,7 +142,7 @@ test_that("[predictRisk.glm] compare to lava (average.iid, no factor)",{
     expect_equal(unname(mean(e.RR)), unname(e.lava$coef))
 
     ## check iid
-    expect_equal(colMeans(attr(e.RR0,"iid")), unname(e.RR.average.iid[,1]))
+    expect_equal(unname(rowMeans(attr(e.RR0,"iid"))), unname(e.RR.average.iid[,1]))
 
     ## check variance
     expect_equal(unname(sum((e.RR.average.iid + (e.RR-mean(e.RR))/NROW(e.RR))^2)), unname(e.lava$vcov)[1,1])
@@ -166,7 +171,7 @@ test_that("[predictGLM] compare to lava (average.iid, factor)",{
     expect_equal(unname(mean(e.RR)), unname(e.lava$coef))
 
     ## check iid
-    expect_equal(colMeans(colMultiply_cpp(attr(e.RR0,"iid"), scale = 1:NROW(dt))), unname(e.RR.average.iid[[1]])[,1])
+    expect_equal(unname(rowMeans(rowMultiply_cpp(attr(e.RR0,"iid"), scale = 1:NROW(dt)))), unname(e.RR.average.iid[[1]])[,1])
 
     ## check variance
     expect_equal(unname(sum((e.RR.average.iid[[1]] + (e.RR-mean(e.RR))/NROW(e.RR))^2)), unname(e.lava$vcov)[1,1])

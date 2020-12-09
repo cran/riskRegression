@@ -2,22 +2,24 @@
 % Please edit documentation in R/ate.R
 \name{ate}
 \alias{ate}
-\title{Compute the Average Treatment Effects Via}
+\title{Average Treatment Effects Computation}
 \usage{
 ate(
   event,
   treatment,
   censor = NULL,
   data,
+  data.index = NULL,
   formula,
   estimator = NULL,
   strata = NULL,
   contrasts = NULL,
+  allContrasts = NULL,
   times,
   cause = NA,
   landmark,
   se = TRUE,
-  iid = FALSE,
+  iid = (B == 0) && (se || band),
   known.nuisance = FALSE,
   band = FALSE,
   B = 0,
@@ -30,19 +32,22 @@ ate(
 )
 }
 \arguments{
-\item{event}{Outcome model which describes how event risk depends
+\item{event}{Outcome model which describes how the probability of experiencing a terminal event depends
 on treatment and covariates. The object carry its own call and
 have a \code{predictRisk} method. See examples.}
 
-\item{treatment}{Treatment model which describes how treatment depends
+\item{treatment}{Treatment model which describes how the probability of being allocated to a treatment group depends
 on covariates. The object must be a \code{glm} object (logistic regression) or the name of the treatment variable.
 See examples.}
 
-\item{censor}{Censoring model which describes how censoring depends
+\item{censor}{Censoring model which describes how the probability of being censored depends
 on treatment and covariates. The object must be a \code{coxph} or \code{cph} object. See examples.}
 
 \item{data}{[data.frame or data.table] Data set in which to evaluate risk predictions
 based on the outcome model}
+
+\item{data.index}{[numeric vector] Position of the observation in argument data relative to the dataset used to obtain the argument event, treatment, censor.
+Only necessary for the standard errors when computing the Average Treatment Effects on a subset of the data set.}
 
 \item{formula}{For analyses with time-dependent covariates, the response formula. See examples.}
 
@@ -55,7 +60,9 @@ When using \code{estimator="AIPTW"} (double robust estimator), a model for the o
 \item{strata}{[character] Strata variable on which to compute the average risk.
 Incompatible with treatment. Experimental.}
 
-\item{contrasts}{[character] The levels of the treatment variable to be compared.}
+\item{contrasts}{[character vector] levels of the treatment variable for which the risks should be assessed and compared. Default is to consider all levels.}
+
+\item{allContrasts}{[2-row character matrix] levels of the treatment variable to be compared. Default is to consider all pairwise comparisons.}
 
 \item{times}{[numeric vector] Time points at which to evaluate average treatment effects.}
 
@@ -70,8 +77,8 @@ it is assumed that that the covariates do not change between landmark and landma
 \item{iid}{[logical] If \code{TRUE} compute and add the influence function to the output.}
 
 \item{known.nuisance}{[logical] If \code{FALSE} the uncertainty related to the estimation of the nuisance parameters is ignored.
-This greatly simplifies computations but requires to use a double robust estimator
-and to assumes that all event, treatment, and censoring models are valid to obtain consistent standard errors.}
+This greatly simplifies computations but requires to use a double robust estimator.
+The resulting standard error is known to be consistent when all event, treatment, and censoring models are valid.}
 
 \item{band}{[logical] If \code{TRUE} compute and add the quantiles for the confidence bands to the output.}
 
@@ -81,32 +88,35 @@ If it equals 0, then the influence function is used to compute Wald-type confide
 \item{seed}{[integer, >0] sed number used to generate seeds for bootstrap
 and to achieve reproducible results.}
 
-\item{handler}{[character] Parallel handler for bootstrap.
-either \code{"foreach"}, \code{"mclapply"}, \code{"snow"} or \code{"multicore"}.
-if "foreach" use \code{doparallel} to create a cluster.}
+\item{handler}{[character] Parallel handler for bootstrap. 
+\code{"foreach"} is the default and the only option on Windows. It uses \code{parallel} to create a cluster.
+Other operating systems can use \code{"mclapply"}.
+This argument is ignored when \code{mc.cores=1} and \code{cl=NULL}.}
 
 \item{mc.cores}{[integer, >0] The number of cores to use,
 i.e., the upper limit for the number of child processes that run simultaneously.
-Passed to \code{parallel::mclapply} or \code{doparallel::registerdoparallel}.
+Passed to \code{parallel::mclapply} or \code{parallel::makeCluster}.
 The option is initialized from environment variable mc_cores if set.}
 
-\item{cl}{A parallel socket cluster used to perform cluster calculation in parallel.
-Output by \code{parallel::makeCluster}.
-The packages necessary to run the computations (e.g. riskRegression) must already be loaded on each worker.}
+\item{cl}{A parallel socket cluster used to perform cluster calculation in parallel (output by \code{parallel::makeCluster}).
+The packages necessary to run the computations (e.g. riskRegression) must already be loaded on each worker.
+Only used when \code{handler="foreach"}.}
 
-\item{verbose}{[logical] If \code{TRUE} inform about estimated run time.
-\code{"minimal"} requires less memory but can only estimate the standard for the difference between treatment effects (and not for the ratio).}
+\item{verbose}{[logical] If \code{TRUE} inform about estimated run time.}
 
 \item{...}{passed to predictRisk}
 }
 \description{
-Use the g-formula/IPTW/double robust estimator to estimate the average treatment
-    effect based on Cox regression with or without competing risks.
+Use the g-formula or the IPW or the double robust estimator
+to estimate the average treatment
+    effect (absolute risk difference or ratio)
+based on Cox regression with or without competing risks.
 }
 \examples{
 library(survival)
 library(rms)
 library(prodlim)
+library(data.table)
 set.seed(10)
 
 #### Survival settings  ####
@@ -122,31 +132,49 @@ dtS$X1 <- factor(rbinom(n, prob = c(0.3,0.4) , size = 2), labels = paste0("T",0:
 fit <- cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
 
 ## compute the ATE at times 5, 6, 7, and 8 using X1 as the treatment variable
+## standard error computed using the influence function
+## confidence intervals / p-values based on asymptotic results
+ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5:8)
+summary(ateFit1a)
+summary(ateFit1a, short = TRUE, type = "meanRisk")
+summary(ateFit1a, short = TRUE, type = "diffRisk")
+summary(ateFit1a, short = TRUE, type = "ratioRisk")
+
 \dontrun{
-## only point estimate (argument se = FALSE)
-ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
-               se = FALSE)
-
-## standard error / confidence intervals computed using the influence function
-## (argument se = TRUE and B = 0)
-ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
-               se = TRUE, B = 0)
-
-## same as before with in addition the confidence bands for the ATE
+## same as before with in addition the confidence bands / adjusted p-values
 ## (argument band = TRUE)
-ateFit1c <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
-               se = TRUE, band = TRUE, B = 0)
+ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
+                band = TRUE)
+summary(ateFit1b)
 
-## standard error / confidence intervals computed using 100 boostrap samples
-## (argument se = TRUE and B = 100) 
-ateFit1d <- ate(fit, data = dtS, treatment = "X1",
-                times = 5:8, se = TRUE, B = 100)
-## NOTE: for real applications 100 bootstrap samples is not enougth 
+## by default bands/adjuste p-values computed separately for each treatment modality
+summary(ateFit1b, band = 1,
+         se = FALSE, type = "diffRisk", short = TRUE, quantile = TRUE)
+## adjustment over treatment and time using the band argument of confint
+summary(ateFit1b, band = 2,
+       se = FALSE, type = "diffRisk", short = TRUE, quantile = TRUE)
+
+## confidence intervals / p-values computed using 1000 boostrap samples
+## (argument se = TRUE and B = 1000) 
+ateFit1c <- ate(fit, data = dtS, treatment = "X1",
+                times = 5:8, se = TRUE, B = 50, handler = "mclapply")
+## NOTE: for real applications 50 bootstrap samples is not enough 
 
 ## same but using 2 cpus for generating and analyzing the boostrap samples
 ## (parallel computation, argument mc.cores = 2) 
+ateFit1d <- ate(fit, data = dtS, treatment = "X1",
+                times = 5:8, se = TRUE, B = 50, mc.cores = 2)
+
+## manually defining the cluster to be used
+## useful when specific packages need to be loaded in each cluster
+fit <- cph(formula = Surv(time,event)~ X1+X2+rcs(X6),data=dtS,y=TRUE,x=TRUE)
+
+cl <- parallel::makeCluster(2)
+parallel::clusterEvalQ(cl, library(rms))
+
 ateFit1e <- ate(fit, data = dtS, treatment = "X1",
-                times = 5:8, se = TRUE, B = 100, mc.cores = 2)
+                times = 5:8, se = TRUE, B = 50,
+                handler = "foreach", cl = cl)
 }
 
 #### Survival settings without censoring ####
@@ -163,18 +191,16 @@ fit <- glm(formula = Y ~ X1+X2, data=dtB, family = "binomial")
 ## compute the ATE using X1 as the treatment variable
 ## only point estimate (argument se = FALSE)
 ateFit1a <- ate(fit, data = dtB, treatment = "X1", se = FALSE)
+ateFit1a
 
 \dontrun{
-## standard error / confidence intervals computed using the influence function
+## with confidence intervals
 ateFit1b <- ate(fit, data = dtB, treatment = "X1",
-               times = 5, ## just for having a nice output not used in computations
-               se = TRUE, B = 0)
-
-## standard error / confidence intervals computed using 100 boostrap samples
-ateFit1d <- ate(fit, data = dtB, treatment = "X1",
-                times = 5, se = TRUE, B = 100)
+               times = 5) ## just for having a nice output not used in computations
+summary(ateFit1b, short = TRUE)
 
 ## using the lava package
+library(lava)
 ateLava <- estimate(fit, function(p, data){
 a <- p["(Intercept)"] ; b <- p["X11"] ; c <- p["X2"] ;
 R.X11 <- expit(a + b + c * data[["X2"]])
@@ -182,48 +208,56 @@ R.X10 <- expit(a + c * data[["X2"]])
 list(risk0=R.X10,risk1=R.X11,riskdiff=R.X11-R.X10)},
 average=TRUE)
 ateLava
-
-ateFit1b$meanRisk
 }
 
 #### Competing risks settings               ####
 #### ATE with cause specific Cox regression ####
 
+## generate data
+n <- 500
+set.seed(10)
+dt <- sampleData(n, outcome="competing.risks")
+dt$X1 <- factor(rbinom(n, prob = c(0.2,0.3) , size = 2), labels = paste0("T",0:2))
+
+## estimate cause specific Cox model
+fitCR <-  CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
+
+## compute the ATE at times 1, 5, 10 using X1 as the treatment variable
+ateFit2a <- ate(fitCR, data = dt, treatment = "X1", times = c(1,5,10),
+                cause = 1, se = TRUE, band = TRUE)
+summary(ateFit2a)
+as.data.table(ateFit2a)
+
+#### Double robust estimator ####
 \dontrun{
 ## generate data
 n <- 500
 set.seed(10)
 dt <- sampleData(n, outcome="competing.risks")
 dt$time <- round(dt$time,1)
-dt$X1 <- factor(rbinom(n, prob = c(0.2,0.3) , size = 2), labels = paste0("T",0:2))
+dt$X1 <- factor(rbinom(n, prob = c(0.4) , size = 1), labels = paste0("T",0:1))
 
-## estimate cause specific Cox model
-fitCR <-  CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
+## working models
+m.event <-  CSC(Hist(time,event)~ X1+X2+X3+X5+X8,data=dt)
+m.censor <-  coxph(Surv(time,event==0)~ X1+X2+X3+X5+X8,data=dt, x = TRUE, y = TRUE)
+m.treatment <-  glm(X1~X2+X3+X5+X8,data=dt,family=binomial(link="logit"))
 
-## compute the ATE at times 10, 15, 20 using X1 as the treatment variable
-ateFit2a <- ate(fitCR, data = dt, treatment = "X1", times = c(10,15,20),
-                cause = 1, se = FALSE)
+## prediction + average
+ateRobust <- ate(event = m.event,
+                 treatment = m.treatment,
+                 censor = m.censor,
+                 data = dt, times = 5:10, 
+                 cause = 1, band = TRUE)
 
-## standard error / confidence intervals computed using the influence function
-## (argument se = TRUE and B = 0)
-ateFit2b <- ate(fitCR, data = dt, treatment = "X1", times = c(10,15,20),
-                cause = 1, se = TRUE, B = 0)
-
-## same as before with in addition the confidence bands for the ATE
-## (argument band = TRUE)
-ateFit2c <- ate(fitCR, data = dt, treatment = "X1", times = c(10,15,20), 
-               cause = 1, se = TRUE, band = TRUE, B = 0)
-
-## standard error / confidence intervals computed using 100 boostrap samples
-## (argument se = TRUE and B = 100) 
-ateFit2d <- ate(fitCR, data = dt, treatment = "X1", times = c(10,15,20), 
-                cause = 1, se = TRUE, B = 100)
-## NOTE: for real applications 100 bootstrap samples is not enougth 
-
-## same but using 2 cpus for generating and analyzing the boostrap samples
-## (parallel computation, argument mc.cores = 2) 
-ateFit2e <- ate(fitCR, data = dt, treatment = "X1", times = c(10,15,20), 
-                cause = 1, se = TRUE, B = 100, mc.cores = 2)
+## compare various estimators
+ateRobust3 <- ate(event = m.event,
+                 treatment = m.treatment,
+                 censor = m.censor,
+                 estimator = c("GFORMULA","IPTW","AIPTW"),
+                 data = dt, times = c(5:10), 
+                 cause = 1, se = TRUE)
+print(setkeyv(as.data.table(ateRobust3, type = "meanRisk"),"time"))
+print(setkeyv(as.data.table(ateRobust3, type = "diffRisk"),"time"))
 }
 
 #### time-dependent covariates ###
@@ -236,11 +270,11 @@ fitTD <- coxph(Surv(tstart, time, status) ~ celltype+karno + age + trt,
                data= vet2,x=1)
 set.seed(16)
 resVet <- ate(fitTD,formula=Hist(entry=tstart,time=time,event=status)~1,
-          data = vet2, treatment = "celltype", contrasts = NULL,
+          data = vet2, treatment = "celltype",
         times=5,verbose=1,
-        landmark = c(0,30,60,90), cause = 1, B = 10, se = 1,
+        landmark = c(0,30,60,90), cause = 1, B = 50, se = 1,
         band = FALSE, mc.cores=1)
-resVet
+summary(resVet)
 }
 
 \dontrun{
@@ -270,8 +304,10 @@ resTD
 }
 }
 \seealso{
-\code{\link{confint.ate}} to compute confidence intervals/bands.
-\code{\link{autoplot.ate}} to display the average risk.
+\code{\link{as.data.table}} to extract the estimates in a \code{data.table} object.
+\code{\link{autoplot.ate}} for a graphical representation the standardized risks.
+\code{\link{confint.ate}} to compute (pointwise/simultaneous) confidence intervals and (unadjusted/adjusted) p-values, possibly using a transformation.
+\code{\link{summary.ate}} for a table containing the standardized risks over time and treatment/strata.
 }
 \author{
 Brice Ozenne \email{broz@sund.ku.dk}

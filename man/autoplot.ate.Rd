@@ -6,17 +6,30 @@
 \usage{
 \method{autoplot}{ate}(
   object,
+  type = "meanRisk",
+  first.derivative = FALSE,
   estimator = object$estimator[1],
-  ci = FALSE,
-  band = FALSE,
+  ci = object$inference$ci,
+  band = object$inference$band,
+  plot.type = "1",
   plot = TRUE,
+  smooth = FALSE,
   digits = 2,
   alpha = NA,
+  ylab = NULL,
   ...
 )
 }
 \arguments{
 \item{object}{Object obtained with the function \code{ate}.}
+
+\item{type}{[character vector] what to displayed.
+Can be \code{"meanRisk"} to display the risks specific to each treatment group,
+\code{"diffRisk"} to display the difference in risks between treatment groups,
+or \code{"ratioRisk"} to display the ratio of risks between treatment groups,.}
+
+\item{first.derivative}{[logical] If \code{TRUE}, display the first derivative over time of the risks/risk differences/risk ratios.
+(confidence intervals are obtained via simulation).}
 
 \item{estimator}{[character] The type of estimator relative to which the risks should be displayed.}
 
@@ -24,44 +37,79 @@
 
 \item{band}{[logical] If \code{TRUE} display the confidence bands for the average risks.}
 
+\item{plot.type}{[character] Type of plot to be used.
+\code{plot.type="2"} is useful when looking simulateneous at all eventtimes.
+Otherwise use \code{plot.type="1"}.}
+
 \item{plot}{[logical] Should the graphic be plotted.}
+
+\item{smooth}{[logical] Should a smooth version of the risk function be plotted instead of a simple function?}
 
 \item{digits}{[integer, >0] Number of decimal places.}
 
 \item{alpha}{[numeric, 0-1] Transparency of the confidence bands. Argument passed to \code{ggplot2::geom_ribbon}.}
 
-\item{...}{not used. Only for compatibility with the plot method.}
+\item{ylab}{[character] Label for the y axis.}
+
+\item{...}{Additional parameters to cutomize the display.}
+}
+\value{
+Invisible. A list containing:
+\itemize{
+\item plot: the ggplot object.
+\item data: the data used to create the plot.
+}
 }
 \description{
 Plot average risks.
 }
 \examples{
-\dontrun{
 library(survival)
 library(rms)
 library(ggplot2)
+
 #### simulate data ####
 n <- 1e2
 set.seed(10)
 dtS <- sampleData(n,outcome="survival")
-
+seqTimes <- c(0,sort(dtS$time[dtS$event==1]),max(dtS$time))
 
 #### Cox model ####
 fit <- cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
 
-#### Average treatment effect ####
-seqTimes <- sort(unique(fit$y[,1]))
-seqTimes5 <- seqTimes[seqTimes>5 & seqTimes<10]
-ateFit <- ate(fit, data = dtS, treatment = "X1", contrasts = NULL,
-              times = seqTimes, B = 0, band = TRUE, nsim.band = 500, y = TRUE,
-              mc.cores=1)
-
-#### display #### 
+#### plot.type = 1: for few timepoints ####
+ateFit <- ate(fit, data = dtS, treatment = "X1",
+              times = c(1,2,5,10), se = TRUE, band = TRUE)
 ggplot2::autoplot(ateFit)
+ggplot2::autoplot(ateFit, band = FALSE)
+ggplot2::autoplot(ateFit, type = "diffRisk")
+ggplot2::autoplot(ateFit, type = "ratioRisk")
 
-outGG <- autoplot(ateFit, band = TRUE, ci = TRUE, alpha = 0.1)
-dd <- as.data.frame(outGG$data[treatment == 0])
-outGG$plot + facet_wrap(~treatment, labeller = label_both)
+#### plot.type = 2: when looking at all jump times ####
+ateFit <- ate(fit, data = dtS, treatment = "X1",
+              times = seqTimes, se = TRUE, band = TRUE)
+
+ggplot2::autoplot(ateFit, plot.type = "2")
+
+## customize plot
+outGG <- ggplot2::autoplot(ateFit, plot.type = "2", alpha = 0.25)
+outGG$plot + facet_wrap(~X1, labeller = label_both)
+
+
+## Looking at the difference after smoothing
+\dontrun{
+outGGS <- ggplot2::autoplot(ateFit, plot.type = "2", alpha = NA, smooth = TRUE)
+outGGS$plot + facet_wrap(~X1, labeller = label_both)
+}
+
+## first derivative
+## (computation of the confidence intervals takes time)
+## (based on simulation - n.sim parameter)
+\dontrun{ 
+ggplot2::autoplot(ateFit, plot.type = "2", smooth = TRUE,
+                  band = FALSE, type = "diffRisk")
+ggplot2::autoplot(ateFit, plot.type = "2", smooth = TRUE, first.derivative = TRUE,
+                  band = FALSE, type = "diffRisk")
 }
 }
 \seealso{

@@ -23,6 +23,7 @@
   product.limit = TRUE,
   store.iid = "full",
   diag = FALSE,
+  max.time = NULL,
   ...
 )
 }
@@ -69,6 +70,9 @@ Can be \code{"full"} or \code{"minimal"}.}
 \item{diag}{[logical] when \code{FALSE} the absolute risk/survival for all observations at all times is computed,
 otherwise it is only computed for the i-th observation at the i-th time.}
 
+\item{max.time}{[numeric] maximum time of the response of the fitted data.  Only relevant if
+model \code{response} element has been removed}
+
 \item{...}{not used.}
 }
 \description{
@@ -88,8 +92,8 @@ Note: for Cox regression models with time varying
     available at the time origin.
 
 The iid decomposition is output using an array containing the value of the influence
-of each subject used to fit the object (dim 3),
-for each subject in newdata (dim 1),
+of each subject used to fit the object (dim 1),
+for each subject in newdata (dim 3),
 and each time (dim 2).
 }
 \examples{
@@ -122,13 +126,13 @@ CSC.fit.s <- CSC(list(Hist(time,event)~ strata(X1)+X2+X9,
 predict(CSC.fit.s,cause=1,times=ttt,se=1L) ## note: absRisk>1 due to small number of observations
 
 ## using the cph function instead of coxph
-CSC.cph <- CSC(Hist(time,event)~ X1+X2,data=d, method = "breslow", fitter = "cph")#' 
+CSC.cph <- CSC(Hist(time,event)~ X1+X2,data=d, method = "breslow", fitter = "cph")#'
 predict(CSC.cph, newdata = d, cause = 2, times = ttt)
 
 ## landmark analysis
 T0 <- 1
-predCSC_afterT0 <- predict(CSC.fit, newdata = d, cause = 2, times = ttt[ttt>T0], landmark = T0)
-predCSC_afterT0
+predCSC.afterT0 <- predict(CSC.fit, newdata = d, cause = 2, times = ttt[ttt>T0], landmark = T0)
+predCSC.afterT0
 }
 \references{
 Brice Ozenne, Anne Lyngholm Sorensen, Thomas Scheike, Christian Torp-Pedersen and Thomas Alexander Gerds.

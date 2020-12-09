@@ -324,6 +324,29 @@
 ##'     ResPaquid
 ##'     plotROC(ResPaquid,time=5)
 ##' }
+##' \dontrun{
+##' # parallel options
+##' # by erikvona: Here is a generic example of using future
+##' # and doFuture, works great with the current version:
+##' library(riskRegression)
+##' library(future)
+##' library(foreach)
+##' library(doFuture)
+##' library(survival)
+##' # Register all available cores for parallel operation
+##' plan(multiprocess, workers = availableCores())
+##' registerDoFuture()
+##' trainSurv <- sampleData(400,outcome="survival")
+##' cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=trainSurv,
+##'              y=TRUE, x = TRUE)
+##' # Bootstrapping on multiple cores
+##' x1 = Score(list("Cox(X1+X2+X7+X9)"=cox1),
+##'      formula=Surv(time,event)~1,data=trainSurv, times=c(5,8), 
+##'      parallel = "as.registered", split.method="bootcv",B=100)
+##' }
+##'
+##'
+##' 
 ##' @author Thomas A Gerds \email{tag@@biostat.ku.dk} and Paul Blanche \email{paul.blanche@@univ-ubs.fr}
 ##' @references
 ##'
@@ -397,7 +420,7 @@ Score.list <- function(object,
                        M,
                        seed,
                        trainseeds,
-                       parallel=c("no","multicore","snow"),
+                       parallel=c("no","multicore","snow","as.registered"),
                        ncpus=1,
                        cl=NULL,
                        progress.bar=3,
@@ -553,12 +576,12 @@ Score.list <- function(object,
             setnames(data,protected.names,paste0("protectedName.",protected.names))
         }
         data <- cbind(response,data)
-        N <- NROW(data)
+        N <- as.numeric(NROW(data))
         neworder <- data[,order(time,-status)]
         data.table::setorder(data,time,-status)
     }else{
         data <- cbind(response,data)
-        N <- NROW(data)
+        N <- as.numeric(NROW(data))
         neworder <- 1:N
     }
     ## add ID variable for merging purposes and because output has long format
@@ -585,7 +608,11 @@ Score.list <- function(object,
     if (split.method$internal.name!="noplan"){
         if (missing(parallel)) parallel <- "no"
         parallel <- match.arg(parallel)
-        if (ncpus<=1) {
+        ## Additionally, I'd like the process to be adjusted when a cluster is
+        ## passed or `as.registered` is specified to ignore the `ncpus` argument
+        ## (very counter-intuitive that when I'm setting up the cluster I still
+        ## need to specify ncpus > 1):
+        if (ncpus<=1 && is.null(cl) && parallel != "as.registered") {            
             parallel <- "no"
         }
         ## if (ncpus <- pmin(ncpus,parallel::detectCores()))
@@ -608,7 +635,9 @@ Score.list <- function(object,
                 warning("Cannot do multi-split test with AUC yet. Forced multi.split.test=FALSE")
                 multi.split.test=FALSE
             }else{
-                warning("Cannot do deal with conservative=FALSE when also multi.split.test=TRUE. Forced conservative=TRUE.")
+                if (se.fit==TRUE & conservative==FALSE){
+                    warning("Cannot do deal with conservative=FALSE when also multi.split.test=TRUE. Forced conservative=TRUE.")
+                }
                 conservative=TRUE
             }
         }
@@ -854,7 +883,7 @@ Score.list <- function(object,
         Brier=IPA=IBS=NULL
         looping <- !is.null(traindata)
         ## if (!looping) b=0
-        N <- NROW(testdata)
+        N <- as.numeric(NROW(testdata))
         # split data vertically into response and predictors X
         response <- testdata[,1:response.dim,with=FALSE]
         response[,ID:=testdata[["ID"]]]
@@ -881,6 +910,7 @@ Score.list <- function(object,
             trainX[,ID:=NULL]
         }
         pred <- data.table::rbindlist(lapply(mlevs, function(f){
+            ## add object specific arguments to predictRisk methods
             if (f[1]>0 && (length(extra.args <- unlist(lapply(object.classes[[f]],function(cc){predictRisk.args[[cc]]})))>0)){
                 args <- c(args,extra.args)
             }
@@ -907,6 +937,7 @@ Score.list <- function(object,
                     set.seed(trainseed)
                     if (f==0) model.f=nullobject[[1]] else model.f=object[[f]]
                     model.f$call$data <- trainX
+                    # browser(skipCalls = 1)
                     trained.model <- try(eval(model.f$call),silent=TRUE)
                     if ("try-error" %in% class(trained.model)){
                         message(paste0("Failed to fit model ",f,ifelse(looping,paste0(" in cross-validation step ",b)),":"))
@@ -1133,17 +1164,21 @@ Score.list <- function(object,
         if (!is.null(progress.bar)){
             message("Running crossvalidation ...")
             if (!(progress.bar %in% c(1,2,3))) progress.bar <- 3
-            pb <- txtProgressBar(max = B, style = progress.bar,width=20)
+            if (B==1 && split.method$internal.name == "crossval")
+                pb <- txtProgressBar(max = split.method$k, style = progress.bar,width=20)
+            else
+                pb <- txtProgressBar(max = B, style = progress.bar,width=20)
         }
         `%dopar%` <- foreach::`%dopar%`
         ## k-fold-CV
         if (split.method$internal.name == "crossval"){
-            DT.B <- rbindlist(foreach::foreach (b=1:B,.export=exports) %dopar%{ ## repetitions of k-fold to avoid Monte-Carlo error
+            DT.B <- rbindlist(foreach::foreach (b=1:B,.export=exports,.packages="data.table",.errorhandling="pass") %dopar%{ ## repetitions of k-fold to avoid Monte-Carlo error
                 index.b <- split.method$index[,b] ## contains a sample of the numbers 1:k with replacement
-                if(!is.null(progress.bar)){setTxtProgressBar(pb, b)}
+                if((B>1) && !is.null(progress.bar)){setTxtProgressBar(pb, b)}
                 DT.b <- rbindlist(lapply(1:split.method$k,function(fold){
                     traindata=data[index.b!=fold]
                     testids <- index.b==fold # (1:N)[index.b!=fold]
+                    if((B==1) && !is.null(progress.bar)){setTxtProgressBar(pb, fold)}
                     ## NOTE: subset.data.table preserves order ## So we need to use subset??
                     testdata <- subset(data,testids)
                     if (cens.type=="rightCensored"){
@@ -1168,7 +1203,7 @@ Score.list <- function(object,
                 DT.b
             })
         }else{# either LeaveOneOutBoot or BootCv
-            DT.B <- rbindlist(foreach::foreach (b=1:B,.export=exports) %dopar%{
+            DT.B <- rbindlist(foreach::foreach (b=1:B,.export=exports,.packages="data.table",.errorhandling="pass") %dopar%{
                 if(!is.null(progress.bar)){setTxtProgressBar(pb, b)}
                 ## DT.B <- rbindlist(lapply(1:B,function(b){
                 traindata=data[split.method$index[,b]]
@@ -1343,9 +1378,9 @@ Score.list <- function(object,
                                         auc.loob[times==t&model==mod,se:=sd(aucDT[["IF.AUC"]])/sqrt(N)]
                                     }
                                 }else{
+                                    ic.weights <- matrix(0,N,N)
                                     if (cens.type[1]=="rightCensored" && (conservative[1]==FALSE)) {
                                         ## ## Influence function for G - i.e. censoring survival distribution
-                                        ic.weights <- matrix(0,N,N)
                                         if  (cens.model=="cox"){
                                             k=0 ## counts subject-times with event before t
                                             for (i in 1:N){
@@ -1644,7 +1679,7 @@ Score.list <- function(object,
                 ## if it turns out that there are almost no bugs, then it may make sense to use the LeaveOneOutBoot clause
                 ## also for k-fold ...
 
-        }}
+            }}
         if (split.method$name=="BootCv"){
             ## | split.method$internal.name=="crossval"){
                                         # {{{ bootcv
@@ -1653,12 +1688,12 @@ Score.list <- function(object,
                 if (!(progress.bar %in% c(1,2,3))) progress.bar <- 3
                 pb <- txtProgressBar(max = B, style = progress.bar,width=20)
             }
-            crossval <- foreach (j=1:B,.export=exports) %dopar%{
+            crossval <- foreach(j=1:B,.export=exports,.packages="data.table",.errorhandling="pass") %dopar%{
                 ## crossval <- lapply(1:B,function(j){
                 DT.b <- DT.B[b==j]
                 N.b <- length(unique(DT.b[["ID"]]))
                 if(!is.null(progress.bar)){
-                    setTxtProgressBar(pb, b)
+                    setTxtProgressBar(pb, j)
                 }
                 computePerformance(DT.b,
                                    N=N.b,
@@ -1742,7 +1777,7 @@ Score.list <- function(object,
                                         # }}}
                                         # {{{ collect data for calibration plots
         if ("Calibration" %in% plots){
-            if (keep.residuals[1] && split.method$name[1]=="LeaveOneOutBoot"){
+            if (keep.residuals[[1]]==TRUE && split.method$name[[1]]=="LeaveOneOutBoot"){
                 crossvalPerf[["Calibration"]]$plotframe <- crossvalPerf$Brier$Residuals[model!=0,]
             } else{
                 ## there are no residuals in this case. residuals are only available for LOOB!
@@ -1753,7 +1788,7 @@ Score.list <- function(object,
                 setcolorder(crossvalPerf[["Calibration"]]$plotframe,c("ID",byvars,Response.names,"risk"))
             }
             crossvalPerf[["Calibration"]]$plotframe[,model:=factor(model,levels=mlevs,mlabels)]
-            if (keep.residuals[1]==FALSE && split.method$name[1]=="LeaveOneOutBoot"){
+            if (keep.residuals[[1]]==FALSE && split.method$name[[1]]=="LeaveOneOutBoot"){
                 crossvalPerf$Brier$Residuals <- NULL
             }
             if (cens.type=="rightCensored")

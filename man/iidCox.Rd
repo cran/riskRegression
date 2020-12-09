@@ -77,7 +77,7 @@ obtained with \code{coxph} (survival package) or \code{cph}
 \item{tau.max}{[numeric] latest time at which the i.i.d decomposition of the baseline hazard will be computed. Alternative to \code{tau.hazard}.}
 
 \item{store.iid}{[character] the method used to compute the influence function and the standard error.
-Can be \code{"full"}, \code{"approx"} or \code{"minimal"}. See the details section.}
+Can be \code{"full"} or \code{"minimal"}. See the details section.}
 
 \item{keep.times}{[logical] If \code{TRUE} add the evaluation times to the output.}
 
@@ -85,7 +85,8 @@ Can be \code{"full"}, \code{"approx"} or \code{"minimal"}. See the details secti
 Otherwise return a list (see the return section)}
 }
 \value{
-For Cox models, the iid slot is a list containing:
+For Cox models, it returns the object with an additional iid slot (i.e. \code{object$iid}).
+It is a list containing:
  \itemize{
  \item{IFbeta}{Influence function for the regression coefficient.}
  \item{IFhazard}{Time differential of the influence function of the hazard.}
@@ -96,24 +97,26 @@ For Cox models, the iid slot is a list containing:
  \item{etime.max}{Last observation time (i.e. jump or censoring) in each strata.}
  \item{indexObs}{Index of the observation in the original dataset.}
 }
+
 For Cause-Specific Cox models,
-a list containing the iid decomposition relative to each cause is returned.
+it returns the object with an additional iid slot for each model (e.g. \code{object$models[[1]]iid}).
 }
 \description{
 Compute the influence function for each observation used to estimate the model
 }
 \details{
 This function implements the first three formula (no number,10,11) of the subsection
-"Empirical estimates" in (Ozenne et al., 2017).
+"Empirical estimates" in Ozenne et al. (2017).
+If there is no event in a strata, the influence function for the baseline hazard is set to 0. 
 
-If there is no event in a strata, the influence function for the baseline hazard is set to 0.
-
-\code{store.iid} equal to \code{"full"} exports the influence function for the coefficients
-and the baseline hazard at each event time.
-\code{store.iid} equal to \code{"approx"} does the same except that the terms that do not contributes
-to the variance are not ignored (i.e. set to 0)
-\code{store.iid} equal to \code{"minimal"} exports the influence function for the coefficients. For the
+\bold{Argument store.iid}:
+If \code{n} denotes the sample size, \code{J} the number of jump times, and \code{p} the number of coefficients:
+\itemize{
+\item \code{store.iid="full"} exports the influence function for the coefficients and the baseline hazard at each event time.
+\item \code{store.iid="minimal"} exports the influence function for the coefficients. For the
 baseline hazard it only computes the quantities necessary to compute the influence function in order to save memory.
+}
+More details can be found in appendix B of Ozenne et al. (2017).
 }
 \examples{
 library(survival)
@@ -125,8 +128,6 @@ setkey(d, eventtime)
 
 m.cox <- coxph(Surv(eventtime, event) ~ X1+X6, data = d, y = TRUE, x = TRUE)
 system.time(IF.cox <- iidCox(m.cox))
-system.time(IF.cox_approx <- iidCox(m.cox, store.iid = "approx"))
-
 
 IF.cox.all <- iidCox(m.cox, tau.hazard = sort(unique(c(7,d$eventtime))))
 IF.cox.beta <- iidCox(m.cox, baseline.iid = FALSE)

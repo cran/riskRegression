@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: maj 23 2018 (14:08) 
 ## Version: 
-## Last-Updated: Jan  6 2020 (08:59) 
-##           By: Thomas Alexander Gerds
-##     Update #: 159
+## Last-Updated: okt  1 2020 (09:48) 
+##           By: Brice Ozenne
+##     Update #: 168
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -26,7 +26,7 @@
 ##' @param absRisk.transform [character] the transformation used to improve coverage
 ##' of the confidence intervals for the predicted absolute risk in small samples.
 ##' Can be \code{"none"}, \code{"log"}, \code{"loglog"}, \code{"cloglog"}.
-##' @param nsim.band [integer, >0] the number of simulations used to compute the quantiles for the confidence bands.
+##' @param n.sim [integer, >0] the number of simulations used to compute the quantiles for the confidence bands.
 ##' @param seed [integer, >0] seed number set before performing simulations for the confidence bands.
 ##' If not given or NA no seed is set.
 ##' @param ... not used.
@@ -73,14 +73,14 @@
 confint.predictCSC <- function(object,
                                parm = NULL,
                                level = 0.95,
-                               nsim.band = 1e4,
+                               n.sim = 1e4,
                                absRisk.transform = "loglog",
                                seed = NA,
                                ...){
 
     if(object$se[[1]] == FALSE && object$band[[1]] == FALSE){
         message("No confidence interval/band computed \n",
-                "Set argument \'se\' or argument \'band\' to TRUE when calling predictCSC \n")
+                "Set argument \'se\' or argument \'band\' to TRUE when calling the predictCSC function \n")
         return(object)
     }
 
@@ -97,11 +97,11 @@ confint.predictCSC <- function(object,
     if(object$band){
         if(is.null(object$absRisk.se)){
             stop("Cannot compute confidence bands \n",
-                 "Set argument \'se\' to TRUE when calling predictCSC \n")
+                 "Set argument \'se\' to TRUE when calling the predictCSC function \n")
         }
         if(is.null(object$absRisk.iid)){
             stop("Cannot compute confidence bands \n",
-                 "Set argument \'iid\' to TRUE when calling predictCSC \n")
+                 "Set argument \'iid\' to TRUE when calling the predictCSC function \n")
         }
     }
     
@@ -111,7 +111,7 @@ confint.predictCSC <- function(object,
                              iid = object$absRisk.iid,
                              null = NA,
                              conf.level = level,
-                             nsim.band = nsim.band,
+                             n.sim = n.sim,
                              seed = seed,
                              type = object$absRisk.transform,
                              min.value = switch(object$absRisk.transform,
@@ -126,10 +126,25 @@ confint.predictCSC <- function(object,
                                                 "cloglog" = NULL),
                              ci = object$se,
                              band = object$band,
+                             method.band = "maxT-simulation",
+                             alternative = "two.sided",
                              p.value = FALSE)
     
     names(outCIBP) <- paste0("absRisk.", names(outCIBP))
     object[names(outCIBP)] <- outCIBP
+
+    ## compute variance-covariance matrix
+    if(!is.null(object[["absRisk.iid"]])){
+        n.obs <- NROW(object[["absRisk"]])
+        n.times <- NCOL(object[["absRisk"]])
+        object$vcov <- lapply(1:n.obs, function(iObs){
+            if(n.times==1){
+                return(sum(object[["absRisk.iid"]][,,iObs]^2))
+            }else{
+                return(crossprod(object[["absRisk.iid"]][,,iObs]))
+            }
+        })
+    }
     
     ## export
     object$conf.level <- level

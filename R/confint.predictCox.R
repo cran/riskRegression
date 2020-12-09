@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: maj 23 2018 (14:08) 
 ## Version: 
-## Last-Updated: Jan  6 2020 (08:59) 
-##           By: Thomas Alexander Gerds
-##     Update #: 263
+## Last-Updated: okt  1 2020 (09:47) 
+##           By: Brice Ozenne
+##     Update #: 287
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -30,7 +30,7 @@
 ##' @param survival.transform [character] the transformation used to improve coverage
 ##' of the confidence intervals for the survival in small samples.
 ##' Can be \code{"none"}, \code{"log"}, \code{"loglog"}, \code{"cloglog"}.
-##' @param nsim.band [integer, >0] the number of simulations used to compute the quantiles for the confidence bands.
+##' @param n.sim [integer, >0] the number of simulations used to compute the quantiles for the confidence bands.
 ##' @param seed [integer, >0] seed number set before performing simulations for the confidence bands.
 ##' If not given or NA no seed is set.
 ##' @param ... not used.
@@ -59,7 +59,7 @@
 ##' fit.pred
 ##'
 ##' ## check standard error
-##' sqrt(rowSums(fit.pred$survival.iid[1,,]^2)) ## se for individual 1
+##' sqrt(rowSums(fit.pred$survival.iid[,,1]^2)) ## se for individual 1
 ##'
 ##' ## check confidence interval
 ##' newse <- fit.pred$survival.se/(-fit.pred$survival*log(fit.pred$survival))
@@ -81,7 +81,7 @@
 confint.predictCox <- function(object,
                                parm = NULL,
                                level = 0.95,
-                               nsim.band = 1e4,
+                               n.sim = 1e4,
                                cumhazard.transform = "log",
                                survival.transform = "loglog",
                                seed = NA,
@@ -89,7 +89,7 @@ confint.predictCox <- function(object,
     
     if(object$se[[1]] == FALSE && object$band[[1]] == FALSE){
         message("No confidence interval/band computed \n",
-                "Set argument \'se\' or argument \'band\' to TRUE when calling predictCox \n")
+                "Set argument \'se\' or argument \'band\' to TRUE when calling the predictCox function \n")
         return(object)
     }
 
@@ -114,18 +114,18 @@ confint.predictCox <- function(object,
         txt <- parm[parm %in% names(object) == FALSE]
         txt2 <- paste0("\"",paste0(txt, collapse = "\" \""),"\"")
         stop(txt2," has/have not been stored in the object \n",
-             "set argument \'parm\' to ",txt2," when calling predictCox \n")
+             "set argument \'parm\' to ",txt2," when calling the predictCox function \n")
     }
 
     if("cumhazard" %in% parm){
         object$cumhazard.transform <- match.arg(cumhazard.transform, c("none","log"))
         if(object$band[[1]] && is.null(object$cumhazard.se)){
             stop("Cannot compute confidence bands \n",
-                 "Set argument \'se\' to TRUE when calling predictCox \n")
+                 "Set argument \'se\' to TRUE when calling the predictCox function \n")
         }
         if(object$band[[1]] && is.null(object$cumhazard.iid)){
             stop("Cannot compute confidence bands \n",
-                 "Set argument \'iid\' to TRUE when calling predictCox \n")
+                 "Set argument \'iid\' to TRUE when calling the predictCox function \n")
         }
 
     }
@@ -134,15 +134,16 @@ confint.predictCox <- function(object,
         object$survival.transform <- match.arg(survival.transform, c("none","log","loglog","cloglog"))
         if(object$band[[1]] && is.null(object$survival.se)){
             stop("Cannot compute confidence bands \n",
-                 "Set argument \'se\' to TRUE when calling predictCox \n")
+                 "Set argument \'se\' to TRUE when calling the predictCox function \n")
         }
         if(object$band[[1]] && is.null(object$survival.iid)){
             stop("Cannot compute confidence bands \n",
-                 "Set argument \'iid\' to TRUE when calling predictCox \n")
+                 "Set argument \'iid\' to TRUE when calling the predictCox function \n")
         }
     }
 
     ## ** compute se, CI/CB
+    object$vcov <- setNames(vector(mode = "list", length = length(parm)), parm)
     for(iType in parm){
         if(iType=="cumhazard"){
             min.value <- switch(object$cumhazard.transform,
@@ -161,23 +162,36 @@ confint.predictCox <- function(object,
                                 "loglog" = NULL,
                                 "cloglog" = NULL)
         }
-        
         outCIBP <- transformCIBP(estimate = object[[iType]],
                                  se = object[[paste0(iType,".se")]],
                                  iid = object[[paste0(iType,".iid")]],
                                  null = NA,
                                  conf.level = level,
-                                 nsim.band = nsim.band,
+                                 n.sim = n.sim,
                                  seed = seed,
                                  type = object[[paste0(iType,".transform")]],
                                  min.value = min.value,
                                  max.value = max.value,
                                  ci = object$se,
                                  band = object$band,
+                                 method.band = "maxT-simulation",
+                                 alternative = "two.sided",
                                  p.value = FALSE)
         names(outCIBP) <- paste0(iType,".", names(outCIBP))
-
         object[names(outCIBP)] <- outCIBP
+
+        ## compute variance-covariance matrix
+        if(!is.null(object[[paste0(iType,".iid")]])){
+            n.obs <- NROW(object[[iType]])
+            n.times <- NCOL(object[[iType]])
+            object$vcov[[iType]] <- lapply(1:n.obs, function(iObs){
+                if(n.times==1){
+                    return(sum(object[[paste0(iType,".iid")]][,,iObs]^2))
+                }else{
+                    return(crossprod(object[[paste0(iType,".iid")]][,,iObs]))
+                }
+            })
+        }
     }
     
     ## ** export

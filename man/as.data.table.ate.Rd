@@ -6,20 +6,23 @@
 \usage{
 \method{as.data.table}{ate}(
   x,
-  keep.rownames = FALSE,
-  se = TRUE,
   estimator = x$estimator,
+  type = c("meanRisk", "diffRisk", "ratioRisk"),
+  keep.rownames = FALSE,
   ...
 )
 }
 \arguments{
 \item{x}{object obtained with function \code{ate}}
 
-\item{keep.rownames}{Not used.}
-
-\item{se}{[logical] Should standard errors/quantile for confidence bands be displayed?}
-
 \item{estimator}{[character] The type of estimator relative to which the estimates should be output.}
+
+\item{type}{[character vector] The type of risk to export.
+Can be \code{"meanRisk"} to export the risks specific to each treatment group,
+\code{"diffRisk"} to export the difference in risks between treatment groups,
+or \code{"ratioRisk"} to export the ratio of risks between treatment groups.}
+
+\item{keep.rownames}{Not used.}
 
 \item{...}{Not used.}
 }

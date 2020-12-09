@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: sep  4 2017 (16:43) 
 ## Version: 
-## last-updated: Jan  6 2020 (09:00) 
-##           By: Thomas Alexander Gerds
-##     Update #: 155
+## last-updated: nov 20 2020 (18:11) 
+##           By: Brice Ozenne
+##     Update #: 169
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -89,7 +89,7 @@ predictCoxPL <- function(object,
         if(is.data.table(newdata)){
             newdata <- copy(newdata)
         }else{
-            setDT(newdata)
+            setDT(copy(newdata))
         }
     }else if (missing(times)) {
         times <- numeric(0)
@@ -108,9 +108,15 @@ predictCoxPL <- function(object,
                                keep.strata = TRUE,
                                keep.infoVar = TRUE,
                                ...)
+
     infoVar <- original.res$infoVar
     if(keep.infoVar==FALSE){
         original.res$infoVar <- NULL
+    }
+
+    ## no event: return exponential approximation (which equals 1 everywhere)
+    if(all(object.modelFrame$status==0)){
+        return(original.res)
     }
 
     ## ** compute survival
@@ -174,9 +180,8 @@ predictCoxPL <- function(object,
                                         newdata = newdata[indexStrata.newdata,],
                                         times = all.times,
                                         type = "hazard")
-
-                lastEventTime.tempo <- res.tempo$lastEventTime[which(infoVar$strata.levels==Ustrata[iStrata])]
                 
+                lastEventTime.tempo <- original.res$lastEventTime[levels(Ustrata) == Ustrata[iStrata]]
                 if(0 %in% all.times){                    
                     hazard.tempo <- cbind(res.tempo$hazard,NA)
                     all.timesA <- c(all.times,lastEventTime.tempo + 1e-10)
@@ -184,7 +189,6 @@ predictCoxPL <- function(object,
                     hazard.tempo <- cbind(0,res.tempo$hazard,NA)
                     all.timesA <- c(0,all.times,lastEventTime.tempo + 1e-10)
                 }
-
                 if(original.res$diag){
                     index.jump <- prodlim::sindex(eval.times = times[indexStrata.newdata], jump.times = all.timesA)
                     original.res$survival[indexStrata.newdata,] <- cbind(sapply(1:length(indexStrata.newdata), function(iP){ # iP <- 16
@@ -205,12 +209,15 @@ predictCoxPL <- function(object,
                                     newdata = newdata,
                                     times = all.times,
                                     type = "hazard")
+
+            lastEventTime.tempo <- original.res$lastEventTime
+                
             if(0 %in% all.times){
                 hazard.tempo <- cbind(res.tempo$hazard,NA)
-                all.timesA <- c(all.times,res.tempo$lastEventTime+1e-10)
+                all.timesA <- c(all.times, lastEventTime.tempo + 1e-10)
             }else{
                 hazard.tempo <- cbind(0,res.tempo$hazard,NA)
-                all.timesA <- c(0,all.times,res.tempo$lastEventTime+1e-10)
+                all.timesA <- c(0,all.times, lastEventTime.tempo + 1e-10)
             }
 
             index.jump <- prodlim::sindex(eval.times = times, jump.times = all.timesA)

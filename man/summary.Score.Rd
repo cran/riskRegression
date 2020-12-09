@@ -8,6 +8,7 @@
   object,
   times,
   what = c("score", "contrasts"),
+  models,
   digits = 1,
   pvalue.digits = 4,
   ...
@@ -19,6 +20,8 @@
 \item{times}{Select time points}
 
 \item{what}{Either \code{"score"}, \code{"contrasts"} or both, i.e., \code{c("score","contrasts")}}
+
+\item{models}{Select which models to summarize. Need to be a subset of \code{object$models}}
 
 \item{digits}{For rounding everything but p-values}
 
