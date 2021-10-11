@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: maj 30 2018 (15:58) 
 ## Version: 
-## Last-Updated: okt  6 2020 (15:15) 
+## Last-Updated: okt  4 2021 (20:04) 
 ##           By: Brice Ozenne
-##     Update #: 466
+##     Update #: 494
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -19,17 +19,17 @@
 ##' @title Compute Standard Errors after Transformation
 ##' @description Compute standard errors after transformation
 ##' based on the standard error before transformation.
+##' @noRd
 ##'
 ##' @param estimate [numeric matrix] the estimate value before transformation.
 ##' @param se [numeric matrix] the standard error before transformation.
 ##' @param type [character] the transforamtion.
-##' Can be \code{"log"}, \code{"loglog"}, \code{"cloglog"}, or \code{"atanh"} (Fisher transform).
+##' Can be \code{"none"}, \code{"log"}, \code{"loglog"}, \code{"cloglog"}, \code{"atanh"} (Fisher transform), or \code{"atanh2"} (modified Fisher transform for [0-1] variable).
 ##' 
 ##' @details Use a delta method to find the standard error after transformation.
 ##'
 ##' \code{se} and \code{estimate} must have same dimensions.
-##' 
-##' @export
+##'
 transformSE <- function(estimate, se, type){
     ## Reference for the formula
     ## Beyersmann, Jan and Allignol, Arthur and Schumacher, Martin. Competing Risks and Multistate Models with R.
@@ -53,6 +53,8 @@ transformSE <- function(estimate, se, type){
         ##                         = dx/(1-x^2)
         ##               Var(f(x)) = Var(x)/(1-x^2)
         newse <- se / (1-estimate^2)
+    }else if(type == "atanh2"){
+        newse <- 2*se / (1-4*(estimate-1/2)^2)
     }
 
     index0 <- which(se==0)
@@ -66,17 +68,17 @@ transformSE <- function(estimate, se, type){
 ##' @title Compute Influence Functions after Transformation
 ##' @description Compute influence functions after transformation
 ##' based on the influence function before transformation.
+##' @noRd
 ##'
 ##' @param estimate [numeric matrix] the estimate value before transformation.
 ##' @param iid [numeric array] the standard error before transformation.
 ##' @param type [character] the transforamtion.
-##' Can be \code{"log"}, \code{"loglog"}, \code{"cloglog"}, or \code{"atanh"} (Fisher transform).
+##' Can be  \code{"none"}, \code{"log"}, \code{"loglog"}, \code{"cloglog"}, \code{"atanh"} (Fisher transform), or \code{"atanh2"} (modified Fisher transform for [0-1] variable).
 ##' 
 ##' @details Use a delta method to find the standard error after transformation.
 ##'
 ##' The iid decomposition must contain have dimension [n.obs,time,n.prediction] and estimate [n.prediction,time].
 ##'
-##' @export
 transformIID <- function(estimate, iid, type){
     ## Reference for the formula
     ## Beyersmann, Jan and Allignol, Arthur and Schumacher, Martin. Competing Risks and Multistate Models with R.
@@ -101,6 +103,8 @@ transformIID <- function(estimate, iid, type){
             ##                         = dx/(1-x^2)
             ##               Var(f(x)) = Var(x)/(1-x^2)
             newiid <- sliceScale_cpp(newiid, M = 1 - estimate^2 )
+        }else if(type == "atanh2"){
+            newiid <- sliceScale_cpp(2*newiid, M = 1 - 4*(estimate-1/2)^2 )
         }
         newiid <- aperm(newiid, c(3,2,1))
     }
@@ -115,12 +119,13 @@ transformIID <- function(estimate, iid, type){
 ##' @title Compute Confidence Intervals using a transformation
 ##' @description Compute confidence intervals using a transformation.
 ##' The resulting confidence interval is returned on the original case (i.e. back-transformed).
+##' @noRd
 ##'
 ##' @param estimate [numeric matrix] the estimate value before transformation.
 ##' @param se [numeric matrix] the standard error after transformation.
 ##' @param quantile [numeric vector] quantile that will be multiplied to each column of \code{se}.
 ##' @param type [character] the transforamtion.
-##' Can be \code{"log"}, \code{"loglog"}, \code{"cloglog"}, or \code{"atanh"} (Fisher transform).
+##' Can be \code{"none"}, \code{"log"}, \code{"loglog"}, \code{"cloglog"}, \code{"atanh"} (Fisher transform), or \code{"atanh2"} (modified Fisher transform for [0-1] variable).
 ##' @param min.value [numeric] if not \code{NULL} and the lower bound of the confidence interval is below \code{min},
 ##' it will be set at \code{min}. 
 ##' @param max.value [numeric] if not \code{NULL} and the lower bound of the confidence interval is below \code{max},
@@ -128,7 +133,6 @@ transformIID <- function(estimate, iid, type){
 ##'
 ##' @details \code{se} and \code{estimate} must have same dimensions.
 ##' 
-##' @export
 transformCI <- function(estimate, se, quantile, type, min.value, max.value){
     ## Reference for the formula
     ## Beyersmann, Jan and Allignol, Arthur and Schumacher, Martin. Competing Risks and Multistate Models with R.
@@ -160,6 +164,9 @@ transformCI <- function(estimate, se, quantile, type, min.value, max.value){
         ## fisher inverse  : g(x) = ( 1 - exp(-2x) ) / ( 1 + exp(-2x) )           
         out$lower <- tanh(atanh(estimate) + quantileLowerSe)
         out$upper <- tanh(atanh(estimate) + quantileUpperSe)
+    }else if(type == "atanh2"){
+        out$lower <- tanh(atanh(2*(estimate-0.5)) + quantileLowerSe)/2 + 1/2
+        out$upper <- tanh(atanh(2*(estimate-0.5)) + quantileUpperSe)/2 + 1/2
     }
 
     ## restrict to [min.value,max.value]
@@ -179,18 +186,18 @@ transformCI <- function(estimate, se, quantile, type, min.value, max.value){
 ## * transformT
 ##' @title Compute T-statistic after a Transformation
 ##' @description Compute T-statistic after a transformation.
+##' @noRd
 ##'
 ##' @param estimate [numeric matrix] the estimate value before transformation.
 ##' @param se [numeric matrix] the standard error after transformation.
 ##' @param null [numeric] the value of the estimate (before transformation) under the null hypothesis.
 ##' @param type [character] the transforamtion.
-##' Can be \code{"log"}, \code{"loglog"}, \code{"cloglog"}, or \code{"atanh"} (Fisher transform).
+##' Can be \code{"none"}, \code{"log"}, \code{"loglog"}, \code{"cloglog"}, \code{"atanh"} (Fisher transform), or \code{"atanh2"} (modified Fisher transform for [0-1] variable).
 ##' @param alternative [character] a character string specifying the alternative hypothesis,
 ##' must be one of \code{"two.sided"} (default), \code{"greater"} or \code{"less"}.
 ##' 
 ##' @details \code{se} and \code{estimate} must have same dimensions.
 ##' 
-##' @export
 transformT <- function(estimate, se, null, type, alternative){
     if(type == "none"){
         statistic <- ( estimate-null )/se
@@ -202,6 +209,8 @@ transformT <- function(estimate, se, null, type, alternative){
         statistic <- ( log(-log(1-estimate)) - log(-log(1-null)) )/se
     }else if(type == "atanh"){
         statistic <- ( atanh(estimate) - atanh(null) )/se
+    }else if(type == "atanh2"){
+        statistic <- ( atanh(2*(estimate - null)) )/se
     }
 
     return(statistic)
@@ -216,7 +225,7 @@ transformT <- function(estimate, se, null, type, alternative){
 ##' @param iid [numeric array] the iid decomposition before transformation.
 ##' @param null [numeric] the value of the estimate (before transformation) under the null hypothesis.
 ##' @param type [character] the transforamtion.
-##' Can be \code{"log"}, \code{"loglog"}, \code{"cloglog"}, or \code{"atanh"} (Fisher transform).
+##' Can be \code{"log"}, \code{"loglog"}, \code{"cloglog"}, or \code{"atanh"} (Fisher transform), or \code{"atanh2"} (modified Fisher transform for [0-1] variable).
 ##' @param conf.level [numeric, 0-1] Level of confidence.
 ##' @param alternative [character] a character string specifying the alternative hypothesis,
 ##' must be one of \code{"two.sided"} (default), \code{"greater"} or \code{"less"}.
@@ -231,18 +240,53 @@ transformT <- function(estimate, se, null, type, alternative){
 ##' @param n.sim [integer, >0] the number of simulations used to compute the quantiles for the confidence bands.
 ##' @param seed [integer, >0] seed number set before performing simulations for the confidence bands.
 ##' @param p.value [logical] should p-values and adjusted p-values be computed. Only active if \code{ci=TRUE} or \code{band>0}.
+##' @param df [integer, >0] optional. Degrees of freedom used for the student distribution of the test statistic. If not specified, use a normal distribution instead.
 ##' 
 ##' @details The iid decomposition must have dimensions [n.obs,time,n.prediction]
 ##' while estimate and se must have dimensions [n.prediction,time].
 ##'
 ##' Single step max adjustment for multiple comparisons, i.e. accounting for the correlation between the test statistics but not for the ordering of the tests, can be performed setting the arguemnt \code{method.band} to \code{"maxT-integration"} or \code{"maxT-simulation"}. The former uses numerical integration (\code{pmvnorm} and \code{qmvnorm} to perform the adjustment while the latter using simulation. Both assume that the test statistics are jointly normally distributed. 
+##'
+##' @examples
+##' set.seed(10)
+##' n <- 100
+##' X <- rnorm(n)
 ##' 
+##' res2sided <- transformCIBP(estimate = mean(X), se = cbind(sd(X)/sqrt(n)), null = 0,
+##'               type = "none", ci = TRUE, conf.level = 0.95, alternative = "two.sided",
+##'               min.value = NULL, max.value = NULL, band = FALSE,
+##'               p.value = TRUE, seed = 10, df = n-1)
+##' 
+##' resLess <- transformCIBP(estimate = mean(X), se = cbind(sd(X)/sqrt(n)), null = 0,
+##'               type = "none", ci = TRUE, conf.level = 0.95, alternative = "less",
+##'               min.value = NULL, max.value = NULL, band = FALSE,
+##'               p.value = TRUE, seed = 10, df = n-1)
+##' 
+##' resGreater <- transformCIBP(estimate = mean(X), se = cbind(sd(X)/sqrt(n)), null = 0,
+##'               type = "none", ci = TRUE, conf.level = 0.95, alternative = "greater",
+##'               min.value = NULL, max.value = NULL, band = FALSE,
+##'               p.value = TRUE, seed = 10, df = n-1)
+##'
+##'
+##' ## comparison with t-test
+##' GS <- t.test(X, alternative = "two.sided")
+##' res2sided$p.value - GS$p.value
+##' unlist(res2sided[c("lower","upper")]) - GS$conf.int
+##' 
+##' GS <- t.test(X, alternative = "less")
+##' resLess$p.value - GS$p.value
+##' unlist(resLess[c("lower","upper")]) - GS$conf.int
+##' 
+##' GS <- t.test(X, alternative = "greater")
+##' resGreater$p.value - GS$p.value
+##' unlist(resGreater[c("lower","upper")]) - GS$conf.int
+##'
 ##' @export
 transformCIBP <- function(estimate, se, iid, null,
                           conf.level, alternative,                        
                           ci, type, min.value, max.value,
                           band, method.band, n.sim, seed,
-                          p.value){
+                          p.value, df = NULL){
 
     p.adjust.methods <-  c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr", "none")
     out <- list()
@@ -322,15 +366,29 @@ transformCIBP <- function(estimate, se, iid, null,
     ## ** unadjusted: confidence intervals and p-value
     if(ci){
         if(alternative == "two.sided"){
-            zval <- c(stats::qnorm((1-conf.level)/2, mean = 0, sd = 1),
-                      stats::qnorm(1 - (1-conf.level)/2, mean = 0, sd = 1))
+            if(is.null(df)){
+                zval <- c(stats::qnorm((1-conf.level)/2, mean = 0, sd = 1),
+                          stats::qnorm(1 - (1-conf.level)/2, mean = 0, sd = 1))
+            }else{
+                zval <- c(stats::qt((1-conf.level)/2, df = df),
+                          stats::qt(1 - (1-conf.level)/2, df = df))
+            }
         }else if(alternative == "greater"){
-            zval <- c(-Inf,
-                      stats::qnorm(conf.level, mean = 0, sd = 1))
-                      
+            if(is.null(df)){
+                zval <- c(stats::qnorm(1-conf.level, mean = 0, sd = 1),
+                          Inf)
+            }else{
+                zval <- c(stats::qt(1-conf.level, df = df),
+                          Inf)
+            }
         }else if(alternative == "less"){
-            zval <- c(stats::qnorm(1-conf.level, mean = 0, sd = 1),
-                      Inf)
+            if(is.null(df)){
+                zval <- c(-Inf,
+                          stats::qnorm(conf.level, mean = 0, sd = 1))
+            }else{
+                zval <- c(-Inf,
+                          stats::qt(conf.level, df = df))
+            }
                       
         }
         out[c("lower","upper")] <- transformCI(estimate = estimate,
@@ -341,11 +399,23 @@ transformCIBP <- function(estimate, se, iid, null,
                                                max.value = max.value)
         if(p.value){
             if(alternative == "two.sided"){
-                out[["p.value"]] <- 2*(1-pnorm(abs(statistic)))
+                if(is.null(df)){
+                    out[["p.value"]] <- 2*(1-stats::pnorm(abs(statistic)))
+                }else{
+                    out[["p.value"]] <- 2*(1-stats::pt(abs(statistic), df = df))
+                }
             }else if(alternative == "less"){
-                out[["p.value"]] <- pnorm(statistic)
+                if(is.null(df)){
+                    out[["p.value"]] <- stats::pnorm(statistic)
+                }else{
+                    out[["p.value"]] <- stats::pt(statistic, df = df)
+                }
             }else if(alternative == "greater"){
-                out[["p.value"]] <- 1-pnorm(statistic)
+                if(is.null(df)){
+                    out[["p.value"]] <- 1-stats::pnorm(statistic)
+                }else{
+                    out[["p.value"]] <- 1-stats::pt(statistic, df = df)
+                }
             }
         }
     }
@@ -552,7 +622,6 @@ transformCIBP <- function(estimate, se, iid, null,
 }
 
 ## * as.data.table.transformCIBP
-#' @export
 as.data.table.transformCIBP <- function(x, keep.rownames = FALSE, ...){
 
     ## add extra argument (should be of the correct size)

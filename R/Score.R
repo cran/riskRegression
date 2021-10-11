@@ -1,4 +1,5 @@
 # {{{ roxy header
+
 ##' Methods to score the predictive performance of risk markers and risk prediction models
 ##'
 ##' The function implements a toolbox for the risk prediction modeller:
@@ -17,6 +18,7 @@
 ##' the p-values correspond to Wald tests based on standard errors obtained with an estimate of the influence function
 ##' as described in detail in the appendix of Blanche et al. (2015).
 ##' @title Score risk predictions
+##' @name Score
 ##' @aliases Score Score.list
 ##' @param object List of risk predictions (see details and examples).
 ##' @param formula A formula which identifies the outcome (left hand
@@ -119,6 +121,7 @@
 ##'  specify additional arguments for the function riskRegression::predictRisk.rfsrc which will pass
 ##'  these on to the function randomForestSRC::predict.rfsrc. A specific example in this case would be
 ##'  \code{list(rfsrc=list(na.action="na.impute"))}.
+##' @param errorhandling .
 ##'
 ##'  A more flexible approach is to write a new predictRisk S3-method. See Details.
 ##' @param debug Logical. If \code{TRUE} indicate landmark in progress of the program.
@@ -341,12 +344,12 @@
 ##'              y=TRUE, x = TRUE)
 ##' # Bootstrapping on multiple cores
 ##' x1 = Score(list("Cox(X1+X2+X7+X9)"=cox1),
-##'      formula=Surv(time,event)~1,data=trainSurv, times=c(5,8), 
+##'      formula=Surv(time,event)~1,data=trainSurv, times=c(5,8),
 ##'      parallel = "as.registered", split.method="bootcv",B=100)
 ##' }
 ##'
 ##'
-##' 
+##'
 ##' @author Thomas A Gerds \email{tag@@biostat.ku.dk} and Paul Blanche \email{paul.blanche@@univ-ubs.fr}
 ##' @references
 ##'
@@ -392,10 +395,12 @@
 #' intuitive measure useful for evaluating risk prediction models. Diagnostic
 #' and Prognostic Research, 2(1):7, 2018.
 ##'
+##' @export Score.list
 ##' @export
 ##'
 # }}}
 # {{{ Score.list
+##' @rdname Score
 Score.list <- function(object,
                        formula,
                        data,
@@ -424,6 +429,7 @@ Score.list <- function(object,
                        ncpus=1,
                        cl=NULL,
                        progress.bar=3,
+                       errorhandling="pass",
                        keep,
                        predictRisk.args,
                        debug=0L,
@@ -597,6 +603,7 @@ Score.list <- function(object,
     rm(response)
     # }}}
     # {{{ SplitMethod & parallel stuff
+
     if (!missing(seed)) {
         ## message("Random seed set to control split of data: seed=",seed)
         set.seed(seed)
@@ -612,7 +619,7 @@ Score.list <- function(object,
         ## passed or `as.registered` is specified to ignore the `ncpus` argument
         ## (very counter-intuitive that when I'm setting up the cluster I still
         ## need to specify ncpus > 1):
-        if (ncpus<=1 && is.null(cl) && parallel != "as.registered") {            
+        if (ncpus<=1 && is.null(cl) && parallel != "as.registered") {
             parallel <- "no"
         }
         ## if (ncpus <- pmin(ncpus,parallel::detectCores()))
@@ -649,6 +656,7 @@ Score.list <- function(object,
             warning("Cannot (not yet) do ROC analysis in combination with internal validation\n. Check devtools::install_github('tagteam/riskRegression') for progress.")
         }
     }
+
     # }}}
     # {{{ Checking the ability of the elements of object to predict risks
     # {{{ number of models and their labels
@@ -815,6 +823,7 @@ Score.list <- function(object,
     # }}}
     # -----------------Dealing with censored data outside the loop -----------------------
     # {{{
+
     if (response.type %in% c("survival","competing.risks")){
         if (cens.type=="rightCensored"){
             if (se.fit[1]>0L && ("AUC" %in% metrics) && (conservative[1]==TRUE)) {
@@ -858,7 +867,15 @@ Score.list <- function(object,
         if ("pseudo" %in% cens.method){
             if (cens.type[1]=="rightCensored"
                 && (response.type %in% c("survival","competing.risks"))){
-                margForm <- update(formula,paste(".~1"))
+                # need to communicate the censoring code of the event variable
+                # produced by Hist via model.frame in case of competing risks
+                if (response.type=="competing.risks"){
+                    censcode <- data[status==0,event[1]]
+                    margForm <- Hist(time,event,cens.code=censcode)~1
+                }else{
+                    censcode <- data[status==0,status[1]]
+                    margForm <- update(formula,".~1")
+                }
                 margFit <- prodlim::prodlim(margForm,data=data)
                 ## position.cause is the result of match(cause, states)
                 jack <- data.table(ID=data[["ID"]],
@@ -870,6 +887,7 @@ Score.list <- function(object,
     } else{
         Weights <- NULL
     }
+
     # }}}
     # -----------------performance program----------------------
     # {{{ define getPerformanceData, setup data in long-format, response, pred, weights, model, times, loop
@@ -1150,7 +1168,9 @@ Score.list <- function(object,
     # }}}
     # -----------------crossvalidation performance---------------------
     # {{{
-    # {{{ bootstrap re-fitting
+
+    # {{{ bootstrap re-fitting and k-fold-CV
+
     if (split.method$internal.name%in%c("BootCv","LeaveOneOutBoot","crossval")){
         if (missing(trainseeds)||is.null(trainseeds)){
             if (!missing(seed)) set.seed(seed)
@@ -1172,7 +1192,7 @@ Score.list <- function(object,
         `%dopar%` <- foreach::`%dopar%`
         ## k-fold-CV
         if (split.method$internal.name == "crossval"){
-            DT.B <- rbindlist(foreach::foreach (b=1:B,.export=exports,.packages="data.table",.errorhandling="pass") %dopar%{ ## repetitions of k-fold to avoid Monte-Carlo error
+            DT.B <- rbindlist(foreach::foreach (b=1:B,.export=exports,.packages="data.table",.errorhandling=errorhandling) %dopar%{ ## repetitions of k-fold to avoid Monte-Carlo error
                 index.b <- split.method$index[,b] ## contains a sample of the numbers 1:k with replacement
                 if((B>1) && !is.null(progress.bar)){setTxtProgressBar(pb, b)}
                 DT.b <- rbindlist(lapply(1:split.method$k,function(fold){
@@ -1796,6 +1816,7 @@ Score.list <- function(object,
         }
                                         # }}}
     }
+
                                         # }}}
                                         #------------------output-----------------------------------
                                         # {{{ enrich the output object
@@ -2138,34 +2159,22 @@ delongtest <-  function(risk,
                         se.fit,
                         keep.vcov) {
     cov=lower=upper=p=AUC=se=lower=upper=NULL
-    Cases <- response == cause
-    Controls <- response != cause
-    nControls <- sum(!Cases)
-    nCases <- sum(Cases)
-    ## if (nbCases==0 || nbControls ==0 || length(unique(risk))==1) return(rep(0,n))
-    nauc <- ncol(risk)
     auc <- score[["AUC"]]
+    nauc <- ncol(risk)
     modelnames <- score[["model"]]
-    riskcontrols <- as.matrix(risk[Controls,])
-    riskcases <- as.matrix(risk[Cases,])
-    V10 <- matrix(0, nrow = nCases, ncol = nauc)
-    V01 <- matrix(0, nrow = nControls, ncol = nauc)
-    tmn <- t(riskcontrols)
-    tmp <- t(riskcases)
-    for (i in 1:nCases) {
-        V10[i, ] <- rowSums(tmn < tmp[, i]) + 0.5 * rowSums(tmn == tmp[, i])
-    }
-    for (i in 1:nControls) {
-        V01[i, ] <- rowSums(tmp > tmn[, i]) + 0.5 * rowSums(tmp == tmn[, i])
-    }
-    V10 <- V10/nControls
-    V01 <- V01/nCases
-    W10 <- cov(V10)
-    W01 <- cov(V01)
-    S <- W10/nCases + W01/nControls
-    se.auc <- sqrt(diag(S))
     score <- data.table(model=colnames(risk),AUC=auc)
     if (se.fit==1L){
+        Cases <- response == cause
+        Controls <- response != cause
+        riskcontrols <- as.matrix(risk[Controls,])
+        riskcases <- as.matrix(risk[Cases,])
+
+        # new method, uses a fast implementation of delongs covariance matrix
+        # Fast Implementation of DeLong’s Algorithm for Comparing the Areas Under Correlated Receiver Operating Characteristic Curves
+        # article can be found here:
+        # https://ieeexplore.ieee.org/document/6851192
+        S <- calculateDelongCovarianceFast(riskcases,riskcontrols)
+        se.auc <- sqrt(diag(S))
         score[,se:=se.auc]
         score[,lower:=pmax(0,AUC-qnorm(1-alpha/2)*se)]
         score[,upper:=pmin(1,AUC+qnorm(1-alpha/2)*se)]
@@ -2178,46 +2187,53 @@ delongtest <-  function(risk,
     ## q2 <- 2 * auc^2/(1 + auc)
     ## aucvar <- (auc * (1 - auc) + (nCases - 1) * (q1 - auc^2) + (nControls - 1) * (q2 - auc^2))/(nCases * nControls)
     if (length(dolist)>0){
-        ncomp <- nauc * (nauc - 1)/2
+        ## browser()
+        ## ncomp <- nauc * (nauc - 1)/2
+        ncomp <- length(dolist)
         delta.AUC <- numeric(ncomp)
         se <- numeric(ncomp)
         model <- numeric(ncomp)
         reference <- numeric(ncomp)
         ctr <- 1
+
         Qnorm <- qnorm(1 - alpha/2)
-        for (i in 1:(nauc - 1)) {
-            for (j in (i + 1):nauc) {
-                delta.AUC[ctr] <- auc[j]-auc[i]
-                if (se.fit==TRUE){
-                    ## cor.auc[ctr] <- S[i, j]/sqrt(S[i, i] * S[j, j])
-                    LSL <- t(c(1, -1)) %*% S[c(j, i), c(j, i)] %*% c(1, -1)
-                    ## print(c(1/LSL,rms::matinv(LSL)))
-                    se[ctr] <- sqrt(LSL)
-                }
-                ## tmpz <- (delta.AUC[ctr]) %*% rms::matinv(LSL) %*% delta.AUC[ctr]
-                ## tmpz <- (delta.AUC[ctr]) %*% (1/LSL) %*% delta.AUC[ctr]
-                model[ctr] <- modelnames[j]
-                reference[ctr] <- modelnames[i]
-                ctr <- ctr + 1
+        for (d in dolist){
+            i <- d[1]
+            j <- d[2]
+            ## for (i in 1:(nauc - 1)) {
+            ## for (j in (i + 1):nauc) {
+            delta.AUC[ctr] <- auc[j]-auc[i]
+            if (se.fit[[1]]){
+                ## cor.auc[ctr] <- S[i, j]/sqrt(S[i, i] * S[j, j])
+                LSL <- t(c(1, -1)) %*% S[c(j, i), c(j, i)] %*% c(1, -1)
+                ## print(c(1/LSL,rms::matinv(LSL)))
+                se[ctr] <- sqrt(LSL)
             }
+            ## tmpz <- (delta.AUC[ctr]) %*% rms::matinv(LSL) %*% delta.AUC[ctr]
+            ## tmpz <- (delta.AUC[ctr]) %*% (1/LSL) %*% delta.AUC[ctr]
+            model[ctr] <- modelnames[j]
+            reference[ctr] <- modelnames[i]
+            ctr <- ctr + 1
+            ## }
         }
-        if (se.fit[[1]]==TRUE||multi.split.test[[1]]==TRUE){
-            deltaAUC <- data.table(model,reference,delta.AUC=as.vector(delta.AUC),se)
-        }else{
-            deltaAUC <- data.table(model,reference,delta.AUC=as.vector(delta.AUC))
-        }
-        if (se.fit==TRUE){
-            deltaAUC[,lower:=delta.AUC-Qnorm*se]
-            deltaAUC[,upper:=delta.AUC+Qnorm*se]
-        }
-        if (se.fit[[1]]==TRUE||multi.split.test[[1]]==TRUE){
-            deltaAUC[,p:=2*pnorm(abs(delta.AUC)/se,lower.tail=FALSE)]
+        deltaAUC <- data.table(model,reference,delta.AUC=as.vector(delta.AUC))
+        if (se.fit[[1]]){
+          deltaAUC[,se:=se]
+          deltaAUC[,lower:=delta.AUC-Qnorm*se]
+          deltaAUC[,upper:=delta.AUC+Qnorm*se]
+          deltaAUC[,p:=2*pnorm(abs(delta.AUC)/se,lower.tail=FALSE)]
         }
         out <- list(score = score, contrasts = deltaAUC)
+        ##if (se.fit[[1]]==TRUE||multi.split.test[[1]]==TRUE){
+        ##    deltaAUC <- data.table(model,reference,delta.AUC=as.vector(delta.AUC),se)
+        ##}else{
+        ##    deltaAUC <- data.table(model,reference,delta.AUC=as.vector(delta.AUC))
+        ##}
     }else{
         out <- list(score = score, contrasts = NULL)
     }
-    if (keep.vcov) {
+    ## should only be kept if se.fit is true
+    if (keep.vcov && se.fit[[1]]==TRUE) {
         out <- c(out,list(vcov=S))
     }
     out

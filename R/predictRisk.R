@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02) 
 ## Version: 
-## last-updated: Dec  5 2020 (11:37) 
-##           By: Thomas Alexander Gerds
-##     Update #: 341
+## last-updated: okt  8 2021 (15:53) 
+##           By: Brice Ozenne
+##     Update #: 399
 #----------------------------------------------------------------------
 ## 
 ### Commentary:
@@ -250,10 +250,16 @@ predictRisk.glm <- function(object, newdata, iid = FALSE, average.iid = FALSE,..
                 n.factor <- NCOL(factor)
             }
 
-            ## ** compute influence function of the coefficients using lava
-            iid.beta <- lava::iid(object)
-
-            newX <- model.matrix(stats::formula(object), newdata)
+            ## ** compute influence function of the coefficients using wglm (more accurate than lava)
+            ## iid.beta <- lava::iid(object)
+            wobject <- list(times = "1", fit = list("1"=object))
+            class(wobject) <- "wglm"
+            object.score <- lava::score(wobject, times = "1", simplifies = FALSE, indiv = TRUE)
+            object.info <- lava::information(wobject, times = "1", simplifies = FALSE)
+            iid.beta <- object.score[["1"]] %*% solve(object.info[["1"]])
+            
+            ff.rhs <- stats::delete.response(stats::terms(stats::formula(object)))
+            newX <- model.matrix(ff.rhs, newdata)
             Xbeta <- predict(object, type = "link", newdata = newdata, se = FALSE)
             
             ## ** chain rule
@@ -272,7 +278,7 @@ predictRisk.glm <- function(object, newdata, iid = FALSE, average.iid = FALSE,..
                 attr(out,"iid") <- iid.beta %*% t(colMultiply_cpp(newX, scale = exp(-Xbeta)/(1+exp(-Xbeta))^2))
             }
         }
-
+        
         ## ** set correct level
         ## hidden argument: enable to ask for the prediction of Y==1 or Y==0
         level <- list(...)$level
@@ -300,17 +306,18 @@ predictRisk.glm <- function(object, newdata, iid = FALSE, average.iid = FALSE,..
                 }                
             }
         }
+        ## print(sum(abs(attr(out,"average.iid")[[1]])))        
         return(out)
     } else {
         stop("Currently only the binomial family is implemented for predicting a status from a glm object.")
     }
 }
-## * predictRisk.multinom
+## * predictRisk.multinomQ
 predictRisk.multinom <- function(object, newdata, iid = FALSE, average.iid = FALSE,...){
     n.obs <- NROW(newdata)
     n.class <- length(object$lev)
     n.coef <- length(coef(object))
-    n.coefperY <- NROW(coef(object))
+    n.coefperY <- n.coef/(n.class-1)
     out <- predict(object, newdata = newdata, type = "probs")
 
     if(n.class == 2){
@@ -392,16 +399,27 @@ predictRisk.multinom <- function(object, newdata, iid = FALSE, average.iid = FAL
         eXbeta_rowSum <- rowSums(exp(Xbeta))
         colnames(Xbeta) <- object$lev
         
-
         if(average.iid){
             attr(out,"average.iid") <- lapply(factor, function(iFactor){
-                apply(iFactor, 2, function(iiFactor){
-                    iRes <- Reduce("+",lapply(object$lev[-1], function(iClass){ ## iClass <- "1"
-                        - iid.beta.level[[iClass]] %*% colMeans(colMultiply_cpp(newX, scale = iiFactor * exp(Xbeta[,iClass]+Xbeta[,level])/eXbeta_rowSum^2))
-                    }))
-                    if(which(level %in% object$lev)>1){
+                apply(iFactor, 2, function(iiFactor){ ## exp(XB_j)/(1+\sum_k exp(XB_j))
+                    
+                    if(level != object$lev[1]){
+                        ## if level l which is not the reference level:  exp(XB_l)/(1+\sum_j exp(XB_j))
+                        ## derivative of the numerator:  IF_l X exp(XB_l)/(1+\sum_j exp(XB_j))
+                        ## derivative of the denumerator: - \sum_k IF_k X exp(XB_k+XB_l)/(1+\sum_j exp(XB_j))^2                    
+                        iRes <- Reduce("+",lapply(object$lev[-1], function(iClass){ ## iClass <- "1"
+                            - iid.beta.level[[iClass]] %*% colMeans(colMultiply_cpp(newX, scale = iiFactor * exp(Xbeta[,iClass]+Xbeta[,level])/eXbeta_rowSum^2))
+                        }))
                         iRes <- iRes + iid.beta.level[[level]] %*% colMeans(colMultiply_cpp(newX, scale = iiFactor * exp(Xbeta[,level])/eXbeta_rowSum))
+                    }else{
+                        ## if reference level: 1/(1+\sum_j exp(XB_j))
+                        ## derivative of the numerator: 0 because the numerator is 1
+                        ## derivative of the denumerator: - \sum_k IF_k X exp(XB_k)/(1+\sum_j exp(XB_j))^2                    
+                        iRes <- Reduce("+",lapply(object$lev[-1], function(iClass){ ## iClass <- "1"
+                            - iid.beta.level[[iClass]] %*% colMeans(colMultiply_cpp(newX, scale = iiFactor * exp(Xbeta[,iClass])/eXbeta_rowSum^2))
+                        }))
                     }
+
                     return(iRes)
                 })
             })
@@ -565,8 +583,14 @@ predictRisk.cox.aalen <- function(object,newdata,times,...){
 ##' @export
 ##' @rdname predictRisk
 ##' @method predictRisk coxph
-predictRisk.coxph <- function(object, newdata, times,
-                              product.limit = FALSE, diag = FALSE, iid = FALSE, average.iid = FALSE, ...){
+predictRisk.coxph <- function(object,
+                              newdata,
+                              times,
+                              product.limit = FALSE,
+                              diag = FALSE,
+                              iid = FALSE,
+                              average.iid = FALSE,
+                              ...){
     dots <- list(...)
     type <- dots$type ## hidden argument for ate
     store.iid <- dots$store ## hidden argument for ate
@@ -777,9 +801,10 @@ predict.survfit <- function(object,newdata,times,bytimes=TRUE,type="cuminc",fill
     else
         if (is.data.frame(newdata))
             npat <- nrow(newdata)
-        else stop("If argument `newdata' is supplied it must be a dataframe." )
+    else stop("If argument `newdata' is supplied it must be a dataframe." )
     ntimes <- length(times)
-    sfit <- summary(object,times=times)
+    maxtime <- max(object$time)
+    sfit <- summary(object,times=pmin(times,maxtime))
     if (is.na(fill))
         Fill <- function(x,len){x[1:len]}
     else if (fill=="last")
@@ -801,7 +826,7 @@ predict.survfit <- function(object,newdata,times,bytimes=TRUE,type="cuminc",fill
             stop("Not all strata defining variables occur in newdata.")
         ## FIXME there are different ways to build strata levels
         ## how can we test which one was used???
-        stratdat <- newdata[,covars,drop=FALSE]
+        stratdat <- lapply(covars,function(x)newdata[[x]])
         names(stratdat) <- covars
         NewStratVerb <- survival::strata(stratdat)
         NewStrat <- interaction(stratdat,sep=" ")
@@ -878,8 +903,9 @@ predictRisk.ranger <- function(object, newdata, times, cause, ...){
 ##' @method predictRisk rfsrc
 predictRisk.rfsrc <- function(object, newdata, times, cause, ...){
     if (missing(times)||is.null(times)){
-        p <- as.numeric(stats::predict(object,newdata=newdata,importance="none",...)$predicted[,2,drop=TRUE])
-        ## class(p) <- "predictRisk"
+        p <- stats::predict(object,newdata=newdata,importance="none",...)$predicted
+        if (NCOL(p)>1)
+        p <- as.numeric(p[,2,drop=TRUE])
         p
     }else{
         if (object$family=="surv") {
@@ -893,6 +919,10 @@ predictRisk.rfsrc <- function(object, newdata, times, cause, ...){
             if (is.character(cause)) cause <- as.numeric(cause)
             if (!is.numeric(cause)) stop("cause is not numeric")
             cif <- stats::predict(object,newdata=newdata,importance="none",...)$cif[,,cause,drop=TRUE]
+            # if necessary restore matrix format after dropping third dimension of array
+            if (NROW(newdata)==1) {
+                cif <- matrix(cif,nrow=1)
+            } 
             pos <- prodlim::sindex(jump.times=object$time.interest,eval.times=times)
             p <- cbind(0,cif)[,pos+1,drop=FALSE]
             if (NROW(p) != NROW(newdata) || NCOL(p) != length(times))
@@ -1286,6 +1316,38 @@ predictRisk.flexsurvreg <- function(object, newdata, times, ...) {
         stop("Prediction failed")
     1 - p
 }
+
+##' @export
+##' @rdname predictRisk
+##' @method predictRisk hal9001
+predictRisk.hal9001 <- function(object,
+                                newdata,
+                                times,
+                                cause,
+                                ...){
+    stopifnot(object$family=="cox")
+    info <- object$surv_info # blank Cox object obtained with riskRegression:::coxModelFrame
+    hal_pred <- predict(object,new_data=newdata)
+    L0 <- riskRegression::baseHaz_cpp(starttimes = info$start,
+                                       stoptimes = info$stop,
+                                       status = info$status,
+                                       eXb = hal_pred,
+                                       strata = 1,
+                                       nPatients = NROW(info$stop),
+                                       nStrata = 1,
+                                       emaxtimes = max(info$stop),
+                                       predtimes = sort(unique(info$stop)),
+                                       cause = 1,
+                                       Efron = TRUE)
+    hal_Surv <- exp(-hal_pred%o%L0$cumhazard)
+    where <- sindex(jump.times=info$stop,eval.times=times)
+    p <- cbind(0,1-hal_Surv)[,1+where]
+    if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)) {
+        stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ", NROW(newdata), " x ", length(times), "\nProvided prediction matrix: ", NROW(p), " x ", NCOL(p), "\n\n", sep = ""))
+    }
+    p
+}
+
 
 ## * predictRisk.singleEventCB
 ##' @export

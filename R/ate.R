@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Oct 23 2016 (08:53) 
 ## Version: 
-## last-updated: okt 26 2020 (10:32) 
+## last-updated: okt  6 2021 (17:52) 
 ##           By: Brice Ozenne
-##     Update #: 2169
+##     Update #: 2270
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -239,7 +239,7 @@
 #' fit <- coxph(Surv(time, status) ~ celltype+karno + age + trt, veteran)
 #' vet2 <- survSplit(Surv(time, status) ~., veteran,
 #'                        cut=c(60, 120), episode ="timegroup")
-#' fitTD <- coxph(Surv(tstart, time, status) ~ celltype+karno + age + trt,
+#' fitTD <- coxph(Surv(tstart, time, status) ~ celltype +karno + age + trt,
 #'                data= vet2,x=1)
 #' set.seed(16)
 #' resVet <- ate(fitTD,formula=Hist(entry=tstart,time=time,event=status)~1,
@@ -305,7 +305,8 @@ ate <- function(event,
                 ...){
 
     dots <- list(...)
-
+    call <- match.call()
+    
     ## ** initialize arguments
     if(is.data.table(data)){
         data <- data.table::copy(data)
@@ -362,7 +363,8 @@ ate <- function(event,
     }
     
     ## ** check consistency of the user arguments
-    check <- ate_checkArgs(object.event = object.event,
+    check <- ate_checkArgs(call = call,
+                           object.event = object.event,
                            object.censor = object.censor,
                            object.treatment = object.treatment,
                            mydata = data,
@@ -685,11 +687,8 @@ ate_initArgs <- function(object.event,
                          product.limit,
                          store.iid){
 
+
     ## ** user-defined arguments
-    ## times
-    if(inherits(object.event,"glm") && missing(times)){
-        times <- NA
-    }
     ## handler
     handler <- match.arg(handler, c("foreach","mclapply","snow","multicore"))
     ## data.index
@@ -722,7 +721,6 @@ ate_initArgs <- function(object.event,
         formula.event <- NULL
         model.event <- NULL
     }
-
     ## Treatment
     if(missing(object.treatment)){
         formula.treatment <- NULL
@@ -730,7 +728,7 @@ ate_initArgs <- function(object.event,
     }else if(inherits(object.treatment,"formula")){
         model.treatment <- do.call(stats::glm, args = list(formula = object.treatment, data = mydata, family = stats::binomial(link = "logit")))        
         formula.treatment <- object.treatment
-    }else if(inherits(object.treatment,"glm")){
+    }else if(inherits(object.treatment,"glm") || inherits(object.treatment,"nnet")){
         formula.treatment <- stats::formula(object.treatment)
         model.treatment <- object.treatment
     }else{
@@ -753,6 +751,11 @@ ate_initArgs <- function(object.event,
         model.censor <- NULL
     }
 
+    ## ** times
+    if(missing(times) && (inherits(model.event,"glm") || (inherits(model.treatment,"glm") && is.null(model.event) && is.null(model.censor)))){
+        times <- NA
+    }
+    
     ## ** identify event, treatment and censoring variables
     if(inherits(model.censor,"coxph") || inherits(model.censor,"cph") || inherits(model.censor,"phreg")){
         censoringMF <- coxModelFrame(model.censor)
@@ -762,7 +765,7 @@ ate_initArgs <- function(object.event,
         info.censor <- SurvResponseVar(coxFormula(model.censor))
         censorVar.status <- info.censor$status
         censorVar.time <- info.censor$time
-        level.censoring <- unique(mydata[[censorVar.status]][model.censor$y[data.index,2]==1])
+        level.censoring <- unique(mydata[[censorVar.status]][model.censor$y[,2]==1])
     }else{ ## G-formula or IPTW (no censoring)
         censorVar.status <- NA
         censorVar.time <- NA
@@ -794,7 +797,7 @@ ate_initArgs <- function(object.event,
     }else if(is.character(object.treatment)){
         treatment <- object.treatment
     }
-    
+
     ## event
     if(inherits(model.event,"CauseSpecificCox")){
         responseVar <- SurvResponseVar(formula.event)
@@ -810,17 +813,22 @@ ate_initArgs <- function(object.event,
         eventVar.time <- responseVar$time
         eventVar.status <- responseVar$status
         if(is.na(cause)){ ## handle Surv(time,event > 0) ~ ...
-            if(any(model.event$y[data.index,NCOL(model.event$y)]==1)){
-                cause <- unique(mydata[[eventVar.status]][model.event$y[data.index,NCOL(model.event$y)]==1])
+            if(any(model.event$y[,NCOL(model.event$y)]==1)){
+                modeldata <- try(eval(model.event$call$data), silent = TRUE)
+                if(inherits(modeldata,"try-error")){
+                    cause <- unique(mydata[[eventVar.status]][model.event$y[,NCOL(model.event$y)]==1])
+                }else{
+                    cause <- unique(modeldata[[eventVar.status]][model.event$y[,NCOL(model.event$y)]==1])
+                }
             }
         }
         if(is.null(product.limit)){product.limit <- FALSE}
         level.states <- 1
-    }else if(inherits(object.event,"glm")){
+    }else if(inherits(model.event,"glm")){
         eventVar.time <- as.character(NA)
         eventVar.status <- all.vars(formula.event)[1]
         if(is.na(cause)){ ## handle I(Y > 0) ~ ...
-            cause <- unique(mydata[[eventVar.status]][model.event$y[data.index]==1])
+            cause <- unique(stats::model.frame(model.event)[[eventVar.status]][model.event$y==1])
         }else{
             cause <- NA
         }
@@ -841,11 +849,19 @@ ate_initArgs <- function(object.event,
         }else if(identical(names(object.event),c("status","time"))){
             eventVar.status <- object.event[1]
             eventVar.time <- object.event[2]
-        }else{            
+        }else if(length(object.event)==2){            
             eventVar.time <- object.event[1]
             eventVar.status <- object.event[2]
+        }else if(length(object.event)==1){
+            eventVar.time <- NA
+            eventVar.status <- object.event[1]
+            if(is.na(cause)){
+                if(any(mydata[[eventVar.status]] %in% 0:2 == FALSE)){
+                    stop("The event variable must be an integer variable taking value 0, 1, or 2. \n")
+                }
+                cause <- 1
+            }
         }
-
         level.states <- setdiff(unique(mydata[[eventVar.status]]), level.censoring)
         if(is.na(cause)){
             cause <- sort(level.states)[1]
@@ -889,13 +905,32 @@ ate_initArgs <- function(object.event,
         }else{
             estimator <- NA
         }
+        test.monotone <- FALSE
     }else{
         estimator <- toupper(estimator)
+
+        ## should montonicity constraint be enforced on estimators based on IPW
+        mestimator <- estimator
+        estimator <- gsub("MONOTONE","",estimator)
+        
+        index.westimator <- which(estimator %in% c("IPTW","IPTW,IPCW","AIPTW","AIPTW,AIPCW"))
+        if(length(index.westimator)>0){
+            test.monotone <- unique(grepl(pattern = "MONOTONE",mestimator[index.westimator]))
+        }else{
+            test.monotone <- FALSE
+        }
+
         if(any(estimator == "IPTW") && any(n.censor>0)){
             estimator[estimator == "IPTW"] <- "IPTW,IPCW"
         }
         if(any(estimator == "AIPTW") && any(n.censor>0)){
             estimator[estimator == "AIPTW"] <- "AIPTW,AIPCW"
+        }
+        if(any(estimator == "G-FORMULA")){
+            estimator[estimator == "G-FORMULA"] <- "GFORMULA"
+        }
+        if(any(estimator == "G-FORMULATD")){
+            estimator[estimator == "G-FORMULATD"] <- "GFORMULA"
         }
     }
 
@@ -908,6 +943,7 @@ ate_initArgs <- function(object.event,
                                       "AIPTW" = "AIPTW",
                                       "AIPTW,AIPCW" = "AIPTW"
                                       ))
+
     if(TD){
         attr(estimator.output,"TD") <- TRUE
     }else{
@@ -965,6 +1001,7 @@ ate_initArgs <- function(object.event,
         attr(estimator.output,"export.AIPTW") <- FALSE
     }
     attr(estimator.output,"full") <- estimator
+    attr(estimator.output,"monotone") <- test.monotone
 
     ## ** sample size
     n.obs <- c(data = NROW(mydata),
@@ -1005,7 +1042,8 @@ ate_initArgs <- function(object.event,
 }
 
 ## * ate_checkArgs
-ate_checkArgs <- function(object.event,
+ate_checkArgs <- function(call,
+                          object.event,
                           object.treatment,
                           object.censor,
                           mydata,
@@ -1087,6 +1125,9 @@ ate_checkArgs <- function(object.event,
             stop("Using a ITPW/AIPTW estimator requires to specify a model for the censoring mechanism (argument \'censor\') in presence of right-censoring \n")
         }
     }
+    if(length(attr(estimator,"monotone"))>1){
+        stop("monotonicity constrain should be request for all or none of the IPW estimators \n")
+    }
     
     ## ** object.event
     if(!is.null(object.event)){
@@ -1106,6 +1147,9 @@ ate_checkArgs <- function(object.event,
         } 
         if(any(is.na(coef(object.event)))){
             stop("Cannot handle missing values in the model coefficients (event) \n")
+        }
+        if(!is.null(treatment) && identical(eventVar.status, treatment)){
+            stop("The treatment variable has the same name as the event variable. \n")
         }
     }
     
@@ -1207,12 +1251,12 @@ ate_checkArgs <- function(object.event,
         if(length(unique(stats::na.omit(n.obs[-1])))>1){
             stop("Arguments \'",paste(names(stats::na.omit(n.obs[-1])), collapse ="\' "),"\' must be fitted using the same number of observations \n")
         }
-
-        if(is.null(data.index)){
-            stop("Incompatible number of observations between argument \'data\' and the datasets from argument(s) \'",paste(names(stats::na.omit(n.obs[-1])), collapse ="\' "),"\' \n",
+        test.data.index <- any(data.index %in% 1:max(n.obs[-1],na.rm = TRUE) == FALSE)
+        if(is.null(data.index) || (is.null(call$data.index) && test.data.index)){
+            stop("Incompatible number of observations between argument \'data\' and the dataset from argument(s) \'",paste(names(stats::na.omit(n.obs[-1])), collapse ="\' "),"\' \n",
                  "Consider specifying argument \'data.index\' \n \n")
         }
-        if(!is.numeric(data.index) || any(duplicated(data.index)) || any(is.na(data.index)) || any(data.index %in% 1:max(n.obs[-1],na.rm = TRUE) == FALSE)){
+        if(!is.numeric(data.index) || any(duplicated(data.index)) || any(is.na(data.index)) || test.data.index){
             stop("Incorrect specification of argument \'data.index\' \n",
                  "Must be a vector of integers between 0 and ",max(n.obs[-1],na.rm = TRUE)," \n")
         }

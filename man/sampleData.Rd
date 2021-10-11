@@ -6,7 +6,8 @@
 \title{Simulate data with binary or time-to-event outcome}
 \usage{
 sampleData(n,outcome="competing.risks",
-formula= ~ f(X1,2)+f(X2,-0.033)+f(X3,0.4)+f(X6,.1)+f(X7,-.1)+f(X8,.5)+f(X9,-1))
+formula= ~ f(X1,2)+f(X2,-0.033)+f(X3,0.4)+f(X6,.1)+f(X7,-.1)+f(X8,.5)+f(X9,-1),
+          intercept=0)
 sampleDataTD(n,n.intervals=5,outcome="competing.risks",
 formula= ~ f(X1,2)+f(X2,-0.033)+f(X3,0.4)+f(X6,.1)+f(X7,-.1)+f(X8,.5)+f(X9,-1))
 }
@@ -20,11 +21,14 @@ competing risks response}
 
 \item{formula}{Specify regression coefficients}
 
+\item{intercept}{For binary outcome the intercept of the logistic regression.}
+
 \item{n.intervals}{\code{sampleDataTD} only: the maximum number of episodes in which the covariates are updated.}
 }
 \value{
 Simulated data as data.table with n rows and the following columns:
-Y (binary outcome), time (non-binary outcome), event (non-binary outcome), X1-X5 (binary predictors), X6-X10 (continous predictors)
+Y (binary outcome), time (non-binary outcome), event (non-binary outcome),
+X1-X5 (binary predictors), X6-X10 (continous predictors)
 }
 \description{
 Simulate data with binary outcome and 10 covariates.

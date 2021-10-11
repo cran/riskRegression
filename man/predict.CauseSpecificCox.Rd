@@ -126,7 +126,7 @@ CSC.fit.s <- CSC(list(Hist(time,event)~ strata(X1)+X2+X9,
 predict(CSC.fit.s,cause=1,times=ttt,se=1L) ## note: absRisk>1 due to small number of observations
 
 ## using the cph function instead of coxph
-CSC.cph <- CSC(Hist(time,event)~ X1+X2,data=d, method = "breslow", fitter = "cph")#'
+CSC.cph <- CSC(Hist(time,event)~ X1+X2,data=d, method = "breslow", fitter = "cph")#' 
 predict(CSC.cph, newdata = d, cause = 2, times = ttt)
 
 ## landmark analysis

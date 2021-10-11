@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // AUCijFun
 NumericMatrix AUCijFun(NumericVector riskCase, NumericVector riskControl);
 RcppExport SEXP _riskRegression_AUCijFun(SEXP riskCaseSEXP, SEXP riskControlSEXP) {
@@ -15,6 +20,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< NumericVector >::type riskCase(riskCaseSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type riskControl(riskControlSEXP);
     rcpp_result_gen = Rcpp::wrap(AUCijFun(riskCase, riskControl));
+    return rcpp_result_gen;
+END_RCPP
+}
+// IC_Nelson_Aalen_cens_time
+NumericMatrix IC_Nelson_Aalen_cens_time(NumericVector time, NumericVector status);
+RcppExport SEXP _riskRegression_IC_Nelson_Aalen_cens_time(SEXP timeSEXP, SEXP statusSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type time(timeSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type status(statusSEXP);
+    rcpp_result_gen = Rcpp::wrap(IC_Nelson_Aalen_cens_time(time, status));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -185,6 +202,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type exportCumHazard(exportCumHazardSEXP);
     Rcpp::traits::input_parameter< bool >::type exportSurvival(exportSurvivalSEXP);
     rcpp_result_gen = Rcpp::wrap(calcAIFsurv_cpp(ls_IFcumhazard, IFbeta, cumhazard0, survival, eXb, X, prevStrata, ls_indexStrata, factor, nTimes, nObs, nStrata, nVar, diag, exportCumHazard, exportSurvival));
+    return rcpp_result_gen;
+END_RCPP
+}
+// calculateDelongCovarianceFast
+NumericMatrix calculateDelongCovarianceFast(NumericMatrix& Xs, NumericMatrix& Ys);
+RcppExport SEXP _riskRegression_calculateDelongCovarianceFast(SEXP XsSEXP, SEXP YsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix& >::type Xs(XsSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix& >::type Ys(YsSEXP);
+    rcpp_result_gen = Rcpp::wrap(calculateDelongCovarianceFast(Xs, Ys));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -520,11 +549,13 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_riskRegression_AUCijFun", (DL_FUNC) &_riskRegression_AUCijFun, 2},
+    {"_riskRegression_IC_Nelson_Aalen_cens_time", (DL_FUNC) &_riskRegression_IC_Nelson_Aalen_cens_time, 2},
     {"_riskRegression_baseHaz_cpp", (DL_FUNC) &_riskRegression_baseHaz_cpp, 11},
     {"_riskRegression_calcSeMinimalCSC_cpp", (DL_FUNC) &_riskRegression_calcSeMinimalCSC_cpp, 36},
     {"_riskRegression_calcSeCif2_cpp", (DL_FUNC) &_riskRegression_calcSeCif2_cpp, 24},
     {"_riskRegression_calcSeMinimalCox_cpp", (DL_FUNC) &_riskRegression_calcSeMinimalCox_cpp, 33},
     {"_riskRegression_calcAIFsurv_cpp", (DL_FUNC) &_riskRegression_calcAIFsurv_cpp, 16},
+    {"_riskRegression_calculateDelongCovarianceFast", (DL_FUNC) &_riskRegression_calculateDelongCovarianceFast, 2},
     {"_riskRegression_colCumSum", (DL_FUNC) &_riskRegression_colCumSum, 1},
     {"_riskRegression_colCumProd", (DL_FUNC) &_riskRegression_colCumProd, 1},
     {"_riskRegression_colSumsCrossprod", (DL_FUNC) &_riskRegression_colSumsCrossprod, 3},

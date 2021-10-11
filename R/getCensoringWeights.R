@@ -16,7 +16,7 @@ getCensoringWeights <- function(formula,
     switch(cens.model,
            "marginal"={
                sFormula <- update(formula,"Surv(time,status)~1")
-               fit <- prodlim::prodlim(sFormula,data=data,reverse=TRUE)
+               fit <- prodlim::prodlim(sFormula,data=data,reverse=TRUE,bandwidth="smooth")
                IPCW.times <- predict(fit,newdata=data,times=times,level.chaos=1,mode="matrix",type="surv")
                IPCW.subject.times <- prodlim::predictSurvIndividual(fit,lag=1)
                out <- list(IPCW.times=IPCW.times,
@@ -24,7 +24,8 @@ getCensoringWeights <- function(formula,
                            method=cens.model)
                if (influence.curve==TRUE){
                    out <- c(out,
-                            list(IC=data[,getInfluenceCurve.KM(time=time,status=status)]))
+                            list(IC=IC_Nelson_Aalen_cens_time(time=data$time,status=data$status)))
+                   ## list(IC=data[,getInfluenceCurve.NelsonAalen(time=time,status=status)]))
                }
                out
            },"cox"={

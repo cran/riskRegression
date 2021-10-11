@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jan  4 2016 (09:43) 
 ## Version: 
-## last-updated: Jan 28 2019 (14:54) 
+## last-updated: Oct  9 2021 (10:28) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 44
+##     Update #: 52
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -26,13 +26,16 @@
 ##' \code{"survival"} = survival response, \code{"competing.risks"} =
 ##' competing risks response
 ##' @param formula Specify regression coefficients
+##' @param intercept For binary outcome the intercept of the logistic regression.
 ##' @usage
 ##' sampleData(n,outcome="competing.risks",
-##' formula= ~ f(X1,2)+f(X2,-0.033)+f(X3,0.4)+f(X6,.1)+f(X7,-.1)+f(X8,.5)+f(X9,-1))
+##' formula= ~ f(X1,2)+f(X2,-0.033)+f(X3,0.4)+f(X6,.1)+f(X7,-.1)+f(X8,.5)+f(X9,-1),
+##'           intercept=0)
 ##' sampleDataTD(n,n.intervals=5,outcome="competing.risks",
 ##' formula= ~ f(X1,2)+f(X2,-0.033)+f(X3,0.4)+f(X6,.1)+f(X7,-.1)+f(X8,.5)+f(X9,-1))
 ##' @return Simulated data as data.table with n rows and the following columns:
-##' Y (binary outcome), time (non-binary outcome), event (non-binary outcome), X1-X5 (binary predictors), X6-X10 (continous predictors)
+##' Y (binary outcome), time (non-binary outcome), event (non-binary outcome),
+##' X1-X5 (binary predictors), X6-X10 (continous predictors)
 ##' @seealso lvm
 ##' @examples
 ##' sampleData(10,outcome="binary")
@@ -40,7 +43,10 @@
 ##' sampleData(10,outcome="competing.risks")
 ##' @export 
 ##' @author Thomas A. Gerds <tag@@biostat.ku.dk>
-sampleData <- function(n,outcome="competing.risks",formula= ~ f(X1,2) + f(X2,-0.033) + f(X3,0.4) + f(X6,.1) + f(X7,-.1) + f(X8,.5) + f(X9,-1)){
+sampleData <- function(n,
+                       outcome="competing.risks",
+                       formula= ~ f(X1,2) + f(X2,-0.033) + f(X3,0.4) + f(X6,.1) + f(X7,-.1) + f(X8,.5) + f(X9,-1),
+                       intercept=0){
     X1=X2=X3=X4=X5=NULL
     outcome <- match.arg(outcome,c("survival","competing.risks","binary"))
     m <- lava::lvm()
@@ -57,6 +63,7 @@ sampleData <- function(n,outcome="competing.risks",formula= ~ f(X1,2) + f(X2,-0.
     if ("binary"%in%outcome){
         lava::distribution(m,~Y) <- lava::binomial.lvm()
         lava::regression(m) <- stats::update(formula,"Y~.")
+        lava::intercept(m,~Y) <- intercept
     }
     if ("survival"%in%outcome){
         lava::distribution(m, "eventtime") <- lava::coxWeibull.lvm(scale = 1/100)

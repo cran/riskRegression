@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: apr  5 2018 (17:01) 
 ## Version: 
-## Last-Updated: okt 29 2020 (16:42) 
+## Last-Updated: okt  7 2021 (11:14) 
 ##           By: Brice Ozenne
-##     Update #: 1326
+##     Update #: 1335
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -53,7 +53,7 @@ iidATE <- function(estimator,
     n.contrasts <- length(contrasts)
     grid <- expand.grid(tau = 1:n.times, contrast = 1:n.contrasts)
     n.grid <- NROW(grid)
-    
+
     ## ** Precompute quantities
     tol <- 1e-12
     if(attr(estimator,"integral")){
@@ -113,15 +113,9 @@ iidATE <- function(estimator,
             }
             
             if(any.AIPTW.AIPCW){
-                if(inherits(object.event,"wglm")){
-                    attr(factor,"factor") <- c(attr(factor,"factor"),
-                                               list(AIPTW = colMultiply_cpp(iW.IPCW * (Y.tau - F1.ctf.tau[[iC]]), scale = -iW.IPTW2[,iC]))
-                                               )
-                }else{
-                    attr(factor,"factor") <- c(attr(factor,"factor"),
-                                               list(AIPTW = colMultiply_cpp(Y.tau * iW.IPCW - F1.ctf.tau[[iC]], scale = -iW.IPTW2[,iC]))
-                                               )
-                }
+                attr(factor,"factor") <- c(attr(factor,"factor"),
+                                           list(AIPTW = colMultiply_cpp(Y.tau * iW.IPCW - F1.ctf.tau[[iC]], scale = -iW.IPTW2[,iC]))
+                                           )
             }else if(any.AIPTW){
                 attr(factor,"factor") <- c(attr(factor,"factor"),
                                            list(AIPTW = colMultiply_cpp(Y.tau - F1.ctf.tau[[iC]], scale = -iW.IPTW2[,iC]))
@@ -148,11 +142,7 @@ iidATE <- function(estimator,
     if(test.IPCW){
         factor <- TRUE        
         for(iTime in 1:n.times){ ## iTime <- 1
-            if(inherits(object.event,"wglm")){
-                attr(factor, "factor") <- lapply(1:n.contrasts, function(iC){cbind(-iW.IPTW[,iC]*iW.IPCW2[,iTime]*(Y.tau[,iTime]-F1.ctf.tau[[iC]][,iTime]))})
-            }else{
-                attr(factor, "factor") <- lapply(1:n.contrasts, function(iC){cbind(-iW.IPTW[,iC]*iW.IPCW2[,iTime]*Y.tau[,iTime])})
-            }
+            attr(factor, "factor") <- lapply(1:n.contrasts, function(iC){cbind(-iW.IPTW[,iC]*iW.IPCW2[,iTime]*Y.tau[,iTime])})
             
             term.censoring <- attr(predictRisk(object.censor, newdata = mydata, times = c(0,time.jumpC)[index.obsSINDEXjumpC[,iTime]+1],
                                                diag = TRUE, product.limit = product.limit, average.iid = factor),"average.iid")
@@ -172,7 +162,6 @@ iidATE <- function(estimator,
 
     ## cat("Censoring (method=1) \n")
     ## print(sapply(lapply(iid.AIPTW,abs),colSums))
-
     ## *** augmentation censoring term
     if(attr(estimator,"integral")){
 

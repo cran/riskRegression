@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Aug  9 2017 (10:36) 
 ## Version: 
-## Last-Updated: Jun 25 2020 (06:58) 
+## Last-Updated: Jun 30 2021 (08:05) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 166
+##     Update #: 170
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -269,7 +269,7 @@ IPA.glm <- function(object,formula,newdata,...){
     out <- as.data.frame(r2[,data.table::data.table(Variable,Brier,IPA,IPA.drop)])
     class(out) <- c("IPA",class(out))
     out
-} 
+}
 
 #' @export
 rsquared <- IPA

@@ -5,6 +5,39 @@ AUCijFun <- function(riskCase, riskControl) {
     .Call(`_riskRegression_AUCijFun`, riskCase, riskControl)
 }
 
+#' @title Influence function for Nelson-Aalen estimator.
+#' 
+#' @description Fast computation of influence function for Nelson-Aalen estimator of the censoring times
+#' @param time sorted vector of event times. Sorted according to time and -status so that events come first a tied times.
+#' @param status sorted vector of 0 = censored or 1 = event (any cause). Sorted according to time and -status so that events come first a tied times.
+#' @return A square matrix where each column corresponds to a subject and each row to a time point. 
+#' @author Thomas Alexander Gerds <tag@@biostat.ku.dk>
+#' @examples
+#' time = c(1,3,3,4)
+#' status = c(1,0,1,1)
+#' IC_Nelson_Aalen_cens_time(time,status)
+#' @export
+IC_Nelson_Aalen_cens_time <- function(time, status) {
+    .Call(`_riskRegression_IC_Nelson_Aalen_cens_time`, time, status)
+}
+
+#' @title C++ Fast Baseline Hazard Estimation
+#' @description C++ function to estimate the baseline hazard from a Cox Model
+#'
+#' @param starttimes a vector of times (begin at risk period). 
+#' @param stoptimes a vector of times (end at risk period). 
+#' @param status a vector indicating  censoring or event. 
+#' @param eXb a numeric vector (exponential of the linear predictor).
+#' @param strata a vector of integers (index of the strata for each observation).
+#' @param predtimes a vector of times (time at which to evaluate the hazard). Must be sorted.
+#' @param emaxtimes another vector of times, one per strata (last observation time in each strata).
+#' @param nPatients number of observations.
+#' @param nStrata number of strata 
+#' @param cause the status value corresponding to event.
+#' @param Efron whether Efron or Breslow estimator should be used in presence of ties.
+#' 
+#' @details WARNING stoptimes status eXb and strata must be sorted by strata, stoptimes, and status
+#' @export
 baseHaz_cpp <- function(starttimes, stoptimes, status, eXb, strata, predtimes, emaxtimes, nPatients, nStrata, cause, Efron) {
     .Call(`_riskRegression_baseHaz_cpp`, starttimes, stoptimes, status, eXb, strata, predtimes, emaxtimes, nPatients, nStrata, cause, Efron)
 }
@@ -23,6 +56,10 @@ calcSeMinimalCox_cpp <- function(seqTau, newSurvival, hazard0, cumhazard0, newX,
 
 calcAIFsurv_cpp <- function(ls_IFcumhazard, IFbeta, cumhazard0, survival, eXb, X, prevStrata, ls_indexStrata, factor, nTimes, nObs, nStrata, nVar, diag, exportCumHazard, exportSurvival) {
     .Call(`_riskRegression_calcAIFsurv_cpp`, ls_IFcumhazard, IFbeta, cumhazard0, survival, eXb, X, prevStrata, ls_indexStrata, factor, nTimes, nObs, nStrata, nVar, diag, exportCumHazard, exportSurvival)
+}
+
+calculateDelongCovarianceFast <- function(Xs, Ys) {
+    .Call(`_riskRegression_calculateDelongCovarianceFast`, Xs, Ys)
 }
 
 #' Apply cumsum in each column 
