@@ -143,7 +143,7 @@ CSC <- function(formula,
     surv.type <- match.arg(surv.type,c("hazard","survival"))
     # }}}
     # {{{ formulae & response
-    if (class(formula)=="formula") formula <- list(formula)
+    if (inherits(x=formula,what="formula")) formula <- list(formula)
     call <- match.call()
     # get outcome information from formula
     Rform <- update(formula[[1]],".~1")
@@ -167,7 +167,7 @@ CSC <- function(formula,
     if (any(entry>time)) stop("entry > time detected. Entry into the study must come first.")
     ## remove event history variables from data
     if(any((this <- match(all.vars(Rform),names(data),nomatch=0))>0)){
-        if (is.data.table(data))
+        if (data.table::is.data.table(data))
             data <- data[,-this,with=FALSE]
         else
             data <- data[,-this]

@@ -123,6 +123,10 @@ sampleMaxProcess_cpp <- function(nSample, nContrast, nSim, value, iid, alternati
     .Call(`_riskRegression_sampleMaxProcess_cpp`, nSample, nContrast, nSim, value, iid, alternative, type, global)
 }
 
+getInfluenceFunctionAUCSurvival <- function(time, status, tau, risk, GTiminus, Gtau, auc) {
+    .Call(`_riskRegression_getInfluenceFunctionAUCSurvival`, time, status, tau, risk, GTiminus, Gtau, auc)
+}
+
 calcE_cpp <- function(eventtime, status, eXb, X, p, add0) {
     .Call(`_riskRegression_calcE_cpp`, eventtime, status, eXb, X, p, add0)
 }
@@ -133,6 +137,26 @@ IFbeta_cpp <- function(newT, neweXb, newX, newStatus, newIndexJump, S01, E1, tim
 
 IFlambda0_cpp <- function(tau, IFbeta, newT, neweXb, newStatus, newStrata, newIndexJump, S01, E1, time1, lastTime1, lambda0, p, strata, minimalExport) {
     .Call(`_riskRegression_IFlambda0_cpp`, tau, IFbeta, newT, neweXb, newStatus, newStrata, newIndexJump, S01, E1, time1, lastTime1, lambda0, p, strata, minimalExport)
+}
+
+columnMeanWeight <- function(A, x) {
+    .Call(`_riskRegression_columnMeanWeight`, A, x)
+}
+
+T3CalculationHelper <- function(x, A) {
+    .Call(`_riskRegression_T3CalculationHelper`, x, A)
+}
+
+htijCalculationHelper <- function(mcase, mcontrol, wcase, wcontrol, n, nrows, ncols) {
+    .Call(`_riskRegression_htijCalculationHelper`, mcase, mcontrol, wcase, wcontrol, n, nrows, ncols)
+}
+
+rowSumsCrossprodSpec <- function(X, Y) {
+    .Call(`_riskRegression_rowSumsCrossprodSpec`, X, Y)
+}
+
+colSumsCrossprodSpec <- function(X, Y) {
+    .Call(`_riskRegression_colSumsCrossprodSpec`, X, Y)
 }
 
 predictCIF_cpp <- function(hazard, cumhazard, eXb, strata, newtimes, etimes, etimeMax, t0, nEventTimes, nNewTimes, nData, cause, nCause, survtype, productLimit, diag, exportSurv) {

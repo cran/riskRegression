@@ -35,7 +35,7 @@ coxVariableName <- function(object, model.frame){
     n.specials <- length(unlist(ls.specials))
     
     n.xterms <- length(attr(xterms,"term.labels"))
-    
+
     ## ** linear predictor
     if(n.xterms>n.specials){
         out$lpvars <- names(coef(object)) ##attr(xterms.lp, "term.labels") not ok for categorical variables with coxph
@@ -207,7 +207,6 @@ coxModelFrame.coxph <- function(object, center = FALSE){
         }
     }
  
-
     ## ** add x
     if(NCOL(object[["x"]])!=0){
         if(center){
@@ -215,6 +214,9 @@ coxModelFrame.coxph <- function(object, center = FALSE){
         }else{
             dt <- as.data.table(object[["x"]])
         }        
+        if(any(names(dt) != names(coef(object))) && NCOL(dt) == length(coef(object))){
+            colnames(dt) <- names(coef(object))
+        }
     }else{
         dt <- NULL
     }
@@ -403,8 +405,14 @@ coxLP.cph <- function(object, data, center){
         }
     
     }else{ ## new dataset
-      
+        ## if(all(object$Design$assume %in% c("category","asis","interaction","strata"))){
+        ## if(!("rcspline" %in% object$Design$assume)){
         Xb <- stats::predict(object, newdata = as.data.frame(data), type = "lp")
+        ## }else{ ## does not work with splines
+        ## X <- model.matrix(object, data = data)
+        ## Xb <- as.vector(X %*% coef)
+        ## }
+        
       
       if(center == FALSE){
         Xb <- Xb + sum(coxCenter(object)*coef)
@@ -443,7 +451,7 @@ coxLP.coxph <- function(object, data, center){
         
         Xb <- try(rowSums(stats::predict(object, newdata = as.data.frame(data), 
                                          type = "terms")), silent = TRUE)
-        if("try-error" %in% class(Xb)){ ## Fix an error when the dataset used to fit the object is removed from the global environment
+        if(inherits(x=Xb,what="try-error")){ ## Fix an error when the dataset used to fit the object is removed from the global environment
           ## survival:::predict.coxph search for it and read (at least) the status variable
           txt <- paste0("survival::predict.coxph returns the following error:\n",
                         as.character(Xb),
@@ -484,7 +492,6 @@ coxLP.phreg <- function(object, data, center){
     n.varLP <- length(coef)
 
     if(n.varLP>0){
-
         if(is.null(data)){ ## training dataset
             X <- object$X
         }else{
@@ -867,11 +874,11 @@ coxVarCov.phreg <- function(object){
 #' }
 SurvResponseVar <- function(formula){
 
-    if(class(formula)=="call"){
+    if(inherits(x=formula,what="call")){
         formula <- eval(formula)
     }
     
-    if(class(formula)=="list"){
+    if(inherits(x=formula,what="list")){
         if(any(unlist(lapply(formula,class))!="formula")){
             stop("When a list, the elements of argument \'formula\' must all be a formula \n")
         }
@@ -949,9 +956,9 @@ SurvResponseVar <- function(formula){
     names(ls.formula) <- c("operator",all.input)
     
     for(iArg in 1:length(ls.formula)){ ## iArg <- 3
-        if(class(ls.formula[[iArg]]) == "name"){
+        if(inherits(x=ls.formula[[iArg]],what="name")){
             ls.formula[[iArg]] <- deparse(ls.formula[[iArg]])
-        }else if(class(ls.formula[[iArg]]) == "call"){
+        }else if(inherits(x=ls.formula[[iArg]],what="call")){
             xx <- as.character(ls.formula[[iArg]])[2]
             attr(xx,"call") <- deparse(ls.formula[[iArg]])
             ls.formula[[iArg]] <- xx
@@ -1059,9 +1066,45 @@ reconstructData <- function(object){
 #' @method model.matrix cph
 model.matrix.cph <- function(object, data){
 
-    M <- survival_model.matrix(object, data)[,object$mmcolnames,drop=FALSE]
-    colnames(M) <- colnames(object[["x"]])
-    return(M)
+    if(all(object$Design$assume %in% c("category","asis","interaction","strata"))){
+        out <- predict(object, newdata = data, type = "x")
+
+        ## put back rms names
+        colnames(out) <- object$Design$colnames[match(object$Design$mmcolnames,colnames(out))]
+    }else{
+        type.special <- setdiff(object$Design$assume,c("category","asis","interaction","strata"))
+        name.special <- attr(object$terms,"term.labels")[object$Design$assume %in% type.special]
+        ## warning("Special operator(s) in the formula: ",paste(name.special,collapse = ", "),".\n",
+        ##         "Associated type: \"",paste(type.special,collapse = "\" \""),"\". \n",
+        ##         "If it is a spline term, consider using survival::coxph instead of rms::cph. \n")
+
+        ## set categorical variables to their appropriate level
+        if(any(object$Design$assume=="category")){ 
+            for(iVar in object$Design$name[object$Design$assume=="category"]){
+                if(!is.factor(data[[iVar]]) || any(sort(levels(data[[iVar]])) != sort(object$Design$parms[[iVar]])) ){
+                    data[[iVar]] <- factor(data[[iVar]], levels=object$Design$parms[[iVar]])
+                }
+            }
+        }
+
+        ## borrowed from survival::coxph
+        mf <- stats::model.frame(object)
+        Terms <- stats::delete.response(terms(mf))
+        out <- model.matrix(Terms, data)
+
+        ## remove intercept
+        out <- out[,attr(out,"assign")!=0,drop=FALSE]
+
+        ## put back rms names
+        if(!is.null(attr(object$Design$mmcolnames,"alt"))){
+            colnames(out) <- object$Design$colnames[match(attr(object$Design$mmcolnames,"alt"),colnames(out))]
+        }else{
+            colnames(out) <- object$Design$colnames[match(object$Design$mmcolnames,colnames(out))]
+        }
+        ## add strata if possible
+        try(attr(out,"strata") <- attr(predict(object, newdata = data, type = "x"),"strata"), silent = TRUE)
+    }
+    return(out)
     
 }
 
@@ -1076,23 +1119,18 @@ model.matrix.cph <- function(object, data){
 #' @method model.matrix phreg
 model.matrix.phreg <- function(object, data){
     special <- c("strata", "cluster")
-    Terms <- terms(coxFormula(object), special, data = data)
-    
+    Terms <- stats::delete.response(attr(object$model.frame, "terms"))
+
     ## remove specials
-    if (!is.null(attributes(Terms)$specials$cluster)) {
+    if (length(attributes(Terms)$specials$cluster)>0) {
         ts <- survival::untangle.specials(Terms, "cluster")
         Terms <- Terms[-ts$terms]
     }
-    if (!is.null(stratapos <- attributes(Terms)$specials$strata)) {
+    if (length(attributes(Terms)$specials$strata)>0) {
         ts <- survival::untangle.specials(Terms, "strata")
         Terms <- Terms[-ts$terms]
     }
     attr(Terms,"intercept") <- 1 ## keep intercept to have the same behavior with and without categorical variables 
-
-    missing.var <- setdiff(all.vars(update(object$formula,".~1")), names(data))
-    if(length(missing.var)>0){
-        data[, c(missing.var) := as.list(object$model.frame[1,1][,missing.var])]
-    }
     X <- model.matrix(Terms, data)
     return(X[,setdiff(colnames(X),"(Intercept)"),drop=FALSE])
 }

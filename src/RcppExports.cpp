@@ -305,6 +305,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// getInfluenceFunctionAUCSurvival
+NumericVector getInfluenceFunctionAUCSurvival(NumericVector time, NumericVector status, double tau, NumericVector risk, NumericVector GTiminus, double Gtau, double auc);
+RcppExport SEXP _riskRegression_getInfluenceFunctionAUCSurvival(SEXP timeSEXP, SEXP statusSEXP, SEXP tauSEXP, SEXP riskSEXP, SEXP GTiminusSEXP, SEXP GtauSEXP, SEXP aucSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type time(timeSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type status(statusSEXP);
+    Rcpp::traits::input_parameter< double >::type tau(tauSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type risk(riskSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type GTiminus(GTiminusSEXP);
+    Rcpp::traits::input_parameter< double >::type Gtau(GtauSEXP);
+    Rcpp::traits::input_parameter< double >::type auc(aucSEXP);
+    rcpp_result_gen = Rcpp::wrap(getInfluenceFunctionAUCSurvival(time, status, tau, risk, GTiminus, Gtau, auc));
+    return rcpp_result_gen;
+END_RCPP
+}
 // calcE_cpp
 List calcE_cpp(const NumericVector& eventtime, const NumericVector& status, const NumericVector& eXb, const arma::mat& X, int p, bool add0);
 RcppExport SEXP _riskRegression_calcE_cpp(SEXP eventtimeSEXP, SEXP statusSEXP, SEXP eXbSEXP, SEXP XSEXP, SEXP pSEXP, SEXP add0SEXP) {
@@ -363,6 +380,71 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type strata(strataSEXP);
     Rcpp::traits::input_parameter< bool >::type minimalExport(minimalExportSEXP);
     rcpp_result_gen = Rcpp::wrap(IFlambda0_cpp(tau, IFbeta, newT, neweXb, newStatus, newStrata, newIndexJump, S01, E1, time1, lastTime1, lambda0, p, strata, minimalExport));
+    return rcpp_result_gen;
+END_RCPP
+}
+// columnMeanWeight
+NumericVector columnMeanWeight(NumericMatrix A, NumericVector x);
+RcppExport SEXP _riskRegression_columnMeanWeight(SEXP ASEXP, SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type A(ASEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(columnMeanWeight(A, x));
+    return rcpp_result_gen;
+END_RCPP
+}
+// T3CalculationHelper
+NumericVector T3CalculationHelper(NumericVector x, NumericMatrix A);
+RcppExport SEXP _riskRegression_T3CalculationHelper(SEXP xSEXP, SEXP ASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type A(ASEXP);
+    rcpp_result_gen = Rcpp::wrap(T3CalculationHelper(x, A));
+    return rcpp_result_gen;
+END_RCPP
+}
+// htijCalculationHelper
+NumericMatrix htijCalculationHelper(NumericVector mcase, NumericVector mcontrol, NumericVector wcase, NumericVector wcontrol, int n, int nrows, int ncols);
+RcppExport SEXP _riskRegression_htijCalculationHelper(SEXP mcaseSEXP, SEXP mcontrolSEXP, SEXP wcaseSEXP, SEXP wcontrolSEXP, SEXP nSEXP, SEXP nrowsSEXP, SEXP ncolsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type mcase(mcaseSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type mcontrol(mcontrolSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type wcase(wcaseSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type wcontrol(wcontrolSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type nrows(nrowsSEXP);
+    Rcpp::traits::input_parameter< int >::type ncols(ncolsSEXP);
+    rcpp_result_gen = Rcpp::wrap(htijCalculationHelper(mcase, mcontrol, wcase, wcontrol, n, nrows, ncols));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rowSumsCrossprodSpec
+NumericMatrix rowSumsCrossprodSpec(arma::mat& X, arma::mat& Y);
+RcppExport SEXP _riskRegression_rowSumsCrossprodSpec(SEXP XSEXP, SEXP YSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::mat& >::type Y(YSEXP);
+    rcpp_result_gen = Rcpp::wrap(rowSumsCrossprodSpec(X, Y));
+    return rcpp_result_gen;
+END_RCPP
+}
+// colSumsCrossprodSpec
+NumericMatrix colSumsCrossprodSpec(arma::mat& X, arma::mat& Y);
+RcppExport SEXP _riskRegression_colSumsCrossprodSpec(SEXP XSEXP, SEXP YSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::mat& >::type Y(YSEXP);
+    rcpp_result_gen = Rcpp::wrap(colSumsCrossprodSpec(X, Y));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -562,9 +644,15 @@ static const R_CallMethodDef CallEntries[] = {
     {"_riskRegression_quantileProcess_cpp", (DL_FUNC) &_riskRegression_quantileProcess_cpp, 7},
     {"_riskRegression_pProcess_cpp", (DL_FUNC) &_riskRegression_pProcess_cpp, 8},
     {"_riskRegression_sampleMaxProcess_cpp", (DL_FUNC) &_riskRegression_sampleMaxProcess_cpp, 8},
+    {"_riskRegression_getInfluenceFunctionAUCSurvival", (DL_FUNC) &_riskRegression_getInfluenceFunctionAUCSurvival, 7},
     {"_riskRegression_calcE_cpp", (DL_FUNC) &_riskRegression_calcE_cpp, 6},
     {"_riskRegression_IFbeta_cpp", (DL_FUNC) &_riskRegression_IFbeta_cpp, 10},
     {"_riskRegression_IFlambda0_cpp", (DL_FUNC) &_riskRegression_IFlambda0_cpp, 15},
+    {"_riskRegression_columnMeanWeight", (DL_FUNC) &_riskRegression_columnMeanWeight, 2},
+    {"_riskRegression_T3CalculationHelper", (DL_FUNC) &_riskRegression_T3CalculationHelper, 2},
+    {"_riskRegression_htijCalculationHelper", (DL_FUNC) &_riskRegression_htijCalculationHelper, 7},
+    {"_riskRegression_rowSumsCrossprodSpec", (DL_FUNC) &_riskRegression_rowSumsCrossprodSpec, 2},
+    {"_riskRegression_colSumsCrossprodSpec", (DL_FUNC) &_riskRegression_colSumsCrossprodSpec, 2},
     {"_riskRegression_predictCIF_cpp", (DL_FUNC) &_riskRegression_predictCIF_cpp, 17},
     {"_riskRegression_rowCumSum", (DL_FUNC) &_riskRegression_rowCumSum, 1},
     {"_riskRegression_rowCumProd", (DL_FUNC) &_riskRegression_rowCumProd, 1},

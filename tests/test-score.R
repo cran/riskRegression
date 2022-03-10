@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jan  4 2016 (14:30) 
 ## Version: 
-## last-updated: Dec  6 2020 (09:27) 
+## last-updated: Mar  4 2022 (18:39) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 147
+##     Update #: 168
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -41,15 +41,15 @@ test_that("binary outcome: robustness against order of data set",{
     f1 <- glm(Y~X1+X5+X8,data=d, family="binomial")
     f2 <- glm(Y~X2+X6+X9+X10,data=d, family="binomial")
     f3 <- d$X8
-    s1 <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=TRUE)
+    s1 <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=TRUE,metrics="auc")
     s1b <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=.95,metrics="auc")
     setkey(d,X4)
     f3 <- d$X8
-    s2 <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=.95)
+    s2 <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=.95,metrics="auc")
     s2b <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=.95,metrics="auc")
     setorder(d,Y)
     f3 <- d$X8
-    s3 <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=.95)
+    s3 <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=.95,metrics="auc")
     s3b <- Score(list(f1,f2,f3),formula=Y~1,data=d,conf.int=.95,metrics="auc")
     ## lapply(names(s1),function(n){print(n);expect_equal(s1[[n]],s3[[n]])})
     s1$call$conf.int <- .95
@@ -60,16 +60,18 @@ test_that("binary outcome: robustness against order of data set",{
     expect_equal(s3$AUC,s3b$AUC)
 })
 # }}}
-# {{{ "survival outcome,Brier Score, external prediction"
+# {{{ "survival outcome, Brier Score, external prediction"
 test_that("survival outcome,Brier Score, external prediction",{
-    if (requireNamespace("pec",quietly=TRUE)){
+    if (!requireNamespace("pec",quietly=FALSE)){
         message("Package pec not installed. Skip this test.")
+        q <- p <- 1
     }else{    
         ## generate simulated data
         set.seed(130971)
         n <- 100
-        dat <- SimSurv(n)
-        dat <- dat[order(dat$time,-dat$status),]
+        dat <- sampleData(n,outcome="survival")
+        dat[,status:=event]
+        setorder(dat,time,-status)
         ## define models
         ## Models <- list("Cox.X1" = coxph(Surv(time,status)~X1,data=dat,y=TRUE),
         Models <- list(
@@ -77,19 +79,22 @@ test_that("survival outcome,Brier Score, external prediction",{
             "runif" = matrix(runif(n),ncol=1),"another.runif" = matrix(runif(n),ncol=1))
         ModelsR <- lapply(Models,function(x)1-x)
         ## training error
-        a <- pec(Models,formula = Surv(time,status)~X1+X2,data=dat,times= c(5),exact=FALSE,start=NULL,verbose=TRUE)
+        library(prodlim)
+        a <- pec::pec(Models,formula = Surv(time,status)~X1+X2,data=dat,times= c(5),exact=FALSE,start=NULL,verbose=TRUE)
         ## compare models
         b <- Score(ModelsR,formula = Surv(time,status)~X1+X2,data=dat,times= c(5),se.fit=FALSE)
-        cbind(b$Brier$score[,Brier],as.vector(unlist(a$AppErr)))
-        expect_equal(b$Brier$score[,Brier],as.vector(unlist(a$AppErr)))
+        q <- b$Brier$score[,Brier]
+        p <- as.vector(unlist(a$AppErr))
     }
+    expect_equal(q,p)
 })
 
 # }}}
 # {{{integrated Brier score
 test_that("integrated Brier score",{
-    if (requireNamespace("pec",quietly=TRUE)){
+    if (!requireNamespace("pec",quietly=TRUE)){
         message("Package pec not installed. Skip this test.")
+        p <- q <- 1
     }else{
         set.seed(18)
         trainSurv <- sampleData(100,outcome="survival")
@@ -97,19 +102,22 @@ test_that("integrated Brier score",{
         library(pec)
         cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=trainSurv, y=TRUE, x = TRUE)
         cox2 = coxph(Surv(time,event)~X3+X5+X6,data=trainSurv, y=TRUE, x = TRUE)
-        xs=Score(list("c1"=cox1,"c2"=cox2),
-                 formula=Surv(time,event)~1,data=testSurv,conf.int=FALSE,
-                 se.fit=FALSE,
-                 summary="ibs",
-                 times=sort(unique(testSurv$time)))
-        xp=pec(list("c1"=cox1,"c2"=cox2),
+        suppressWarnings(xs <- Score(list("c1"=cox1,"c2"=cox2),
+                                  formula=Surv(time,event)~1,data=testSurv,conf.int=FALSE,
+                                  se.fit=FALSE,
+                                  summary="ibs",
+                                  times=sort(unique(testSurv$time))))
+        library(prodlim)
+        xp=pec::pec(list("c1"=cox1,"c2"=cox2),
                formula=Surv(time,event)~1,data=testSurv,
                times=sort(unique(testSurv$time)))
-        a1 <- ibs(xp,times=sort(unique(testSurv$time)),models="c1")
-        b1 <- xs$Brier$score[model=="c1",IBS]
+        a1 <- as.numeric(ibs(xp,times=sort(unique(testSurv$time)),models="c1"))
+        b1 <- xs$Brier$score[model=="c1"][["IBS"]]
         ## cbind(a1,b1)
-        expect_equal(as.numeric(c(a1,use.names=FALSE)),c(b1))
+        q <- as.numeric(c(a1,use.names=FALSE))
+        p <- c(b1)
     }
+    expect_equal(p,q)
 })
 # }}}
 
@@ -120,23 +128,16 @@ test_that("survival outcome uncensored",{
     }else{
         library(survival)
         library(data.table)
-        library(randomForestSRC)
+        library(rms)
         library(riskRegression)
         library(prodlim)
         set.seed(8)
         d <- sampleData(100,outcome="survival")
-        d$event=1
+        d[,event:=rep(1,.N)]
         cx=coxph(Surv(time,event)~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10,d,x=TRUE)
-        rfx=rfsrc(Surv(time,event)~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10,data=d,ntree=10)
-        out <- Score(list(Cox=cx,RF=rfx),
-                     data=d,
-                     metrics="brier",
-                     summary="ibs",
-                     contrasts=FALSE,
-                     times=sort(unique(d$time)),
-                     formula=Hist(time,event)~1,
-                     se.fit=FALSE)
-        out
+        cx1=cph(Surv(time,event)~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10,d,x=TRUE,y=TRUE)
+        out <- Score(list(Cox=cx,Cph=cx1),data=d,metrics="brier",summary="ibs",contrasts=FALSE,times=1:8,formula=Hist(time,event)~1,se.fit=FALSE)
+        expect_equal(100*out$Brier$score[model=="Cox"]$IBS,100*out$Brier$score[model=="Cph"]$IBS,tolerance=0.001)
     }
 })
 # }}}
@@ -181,7 +182,7 @@ test_that("binary outcome: AUC", {
         procres <- pROC::roc.test(r1,r2)
         d <- data.frame(x1,x2,x3,y)
         ## Source(riskRegression)
-        scoreres <- Score(list(X1=~x1,X2=~x2,X3=~x3),formula=y~1,data=d,null.model=FALSE,cause="1")
+        scoreres <- Score(list(X1=~x1,X2=~x2,X3=~x3),formula=y~1,data=d,null.model=FALSE,cause="1",metrics="auc")
         ## Roc(list(X1=glm(y~x1,data=d,family='binomial'),X2=glm(y~x2,data=d,family='binomial'),X3=glm(y~x3,data=d,family='binomial')),formula=y~1,data=d)
         scoreres <- Score(list(X1=glm(y~x1,data=d,family='binomial'),X2=glm(y~x2,data=d,family='binomial'),X3=glm(y~x3,data=d,family='binomial')),formula=y~1,data=d,null.model=FALSE,cause="1")
         ## to avoid side effects of data.table features we check the following 
@@ -203,5 +204,21 @@ test_that("binary outcome: AUC", {
     }
 })
 # }}}
+
+## library(survival)
+## library(riskRegression)
+## library(rms)
+## data(pbc)
+## pbc <- na.omit(pbc)
+## pbc$time=pbc$time+rnorm(nrow(pbc),sd=.1)
+## a <- cph(Surv(time,status!=0)~age+edema+sex+log(bili),data=pbc,surv=TRUE,y=1,x=1)
+## b <- cph(Surv(time,status!=0)~age+edema+sex+log(bili)+log(protime)+log(albumin),data=pbc,surv=TRUE,y=1,x=1)
+## set.seed(17)
+## x <- Score(list(a,b),data=pbc,formula=Surv(time,status!=1)~1,cause=1,times=c(1000),metrics=c("auc"))
+## r <- pec(list(a,b),data=pbc,start=NULL,Surv(time,status!=1)~1,times=c(100,500,1000),exact=FALSE)
+## u <- with(pbc,timeROC(T=time,delta=status!=0,marker=1-predictSurvProb(a,times=1500,newdata=pbc),cause=1,times=1500,iid=TRUE))
+## u2 <- with(pbc,timeROC(T=time,delta=status!=0,marker=1-predictSurvProb(b,times=1500,newdata=pbc),cause=1,times=c(1500)))
+## v <- Score(list(a,b),data=pbc,formula=Surv(time,status!=0)~1,times=c(500,1500),metrics=c("AUC"))
+
 #----------------------------------------------------------------------
 ### test-Score.R ends here

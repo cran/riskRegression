@@ -456,7 +456,10 @@ predict.CauseSpecificCox <- function(object,
         c(iI$lpvars.original, iI$stratavars.original)
     })))
     if(keep.newdata[[1]]==TRUE && length(all.covars)>0){
-        out$newdata <- newdata[, all.covars, with = FALSE]
+        if (data.table::is.data.table(newdata))
+            out$newdata <- newdata[, all.covars, with = FALSE]
+        else
+            out$newdata <- newdata[, all.covars,drop=FALSE]
     }
     if(keep.strata==TRUE){
         allStrata <- unique(unlist(lapply(ls.infoVar,"[[","stratavars.original")))
@@ -484,6 +487,15 @@ predict.CauseSpecificCox <- function(object,
         out["absRisk.iid"] <- NULL
     }
     ## export
+    if(any(na.omit(as.double(out$absRisk))>1) || any(na.omit(as.double(out$absRisk))<0)){
+        if(product.limit){
+            warning("Estimated risk outside the range [0,1].\n",
+                    "Consider setting the argument \'product.limit\' to FALSE. \n")
+        }else{
+            warning("Estimated risk outside the range [0,1].\n",
+                    "Possible cause: incorrect extrapolation, i.e., time and/or covariates used for the prediction differ from those used to fit the Cox models.\n")
+        }
+    }
     return(out)
 }
 
