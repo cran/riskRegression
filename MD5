@@ -1,9 +1,9 @@
-125827ad64c0f93ef00b454a918e62de *DESCRIPTION
+fdeac3a124a328b0df2bae41d47a093f *DESCRIPTION
 8d6f70d950d7ad83a8f79c3f62b71632 *NAMESPACE
 e69a6a0b8e01cad43b3b8e068f46c8a0 *NEWS
 41c5bd2a7651167d3226a64ae0e56718 *R/0onload.R
 ec88fb840854454f40263b1d0944e0a0 *R/ARR.R
-d2877fa91bdb4de287837ffac596bbae *R/AUC.binary.R
+7f706d8c30dfb7f159434071b8f0773b *R/AUC.binary.R
 5349256d6d957b6209561a98966788a6 *R/AUC.competing.risks.R
 6fc64d2419afaf497caa36cca87743dc *R/AUC.survival.R
 5c751e60dc23fb3600165e21cbda43f1 *R/Brier.binary.R
@@ -68,7 +68,7 @@ ee25489603e0805f4abcf79e9c9bb35c *R/predict.FGR.R
 9d56f37546da45613fa7c2f6984fc3c2 *R/predict.riskRegression.R
 5739c6bc4228799c20dfc8bc108cd820 *R/predictCox.R
 411734483f6dadb5e6ff078969dc1888 *R/predictCoxPL.R
-d465096b80eae7ec8c4204596b308942 *R/predictRisk.R
+54ab931fd8f9d987ebca4d710183d0ea *R/predictRisk.R
 dac25b1802716ec076bd045add08bed3 *R/predictRisk.party.R
 996454202d5022084d235c06bddb0b6f *R/print.CauseSpecificCox.R
 c80fadacc8b1e10b95d5a528ee8453dc *R/print.FGR.R
@@ -223,7 +223,7 @@ dba192c1df2544ff57a9fa764e0a1029 *src/Makevars.win
 241ba80cdd688c5f83da813d4a2c65b8 *src/baseHaz.cpp
 4b6add0eb9564adfcfe51d146a6b0de0 *src/calcSeCSC.cpp
 a2d26e96afcf7f75ecba7e67369f1f4d *src/calcSeCox.cpp
-d5c6cc6398c843edc75d1d812cd5974a *src/calculateDelongCovarianceMatrix.cpp
+eb9e3d6cbb713c08f75d0c5b43b6197f *src/calculateDelongCovarianceMatrix.cpp
 95253d8b6c1a0835820a877be8a755d0 *src/colCumSum.cpp
 d2456adfa4e9bbed644a9a3b0f48f61f *src/colSumsCrossprod.cpp
 ff66083421574ecb856c50f44de80b5d *src/confBand.cpp
