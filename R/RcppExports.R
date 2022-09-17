@@ -123,8 +123,28 @@ sampleMaxProcess_cpp <- function(nSample, nContrast, nSim, value, iid, alternati
     .Call(`_riskRegression_sampleMaxProcess_cpp`, nSample, nContrast, nSim, value, iid, alternative, type, global)
 }
 
-getInfluenceFunctionAUCSurvival <- function(time, status, tau, risk, GTiminus, Gtau, auc) {
-    .Call(`_riskRegression_getInfluenceFunctionAUCSurvival`, time, status, tau, risk, GTiminus, Gtau, auc)
+getInfluenceFunctionAUCKMCensoring <- function(time, status, tau, risk, GTiminus, Gtau, auc, tiedValues) {
+    .Call(`_riskRegression_getInfluenceFunctionAUCKMCensoring`, time, status, tau, risk, GTiminus, Gtau, auc, tiedValues)
+}
+
+getInfluenceFunctionAUCKMCensoringCVPart <- function(time, status, tau, GTiminus, Gtau, thetahat, whichControls, whichCases, nu1tauPm) {
+    .Call(`_riskRegression_getInfluenceFunctionAUCKMCensoringCVPart`, time, status, tau, GTiminus, Gtau, thetahat, whichControls, whichCases, nu1tauPm)
+}
+
+getInfluenceFunctionAUCBinaryCVPart <- function(Y, thetahat, whichControls, whichCases, nu1tauPm) {
+    .Call(`_riskRegression_getInfluenceFunctionAUCBinaryCVPart`, Y, thetahat, whichControls, whichCases, nu1tauPm)
+}
+
+getInfluenceFunctionBrierKMCensoring <- function(tau, time, risk, status, GTiminus, brier) {
+    .Call(`_riskRegression_getInfluenceFunctionBrierKMCensoring`, tau, time, risk, status, GTiminus, brier)
+}
+
+getInfluenceFunctionBrierKMCensoringUseSquared <- function(tau, time, residuals, status) {
+    .Call(`_riskRegression_getInfluenceFunctionBrierKMCensoringUseSquared`, tau, time, residuals, status)
+}
+
+getInfluenceFunctionBrierCVCensoringKM <- function(tau, time, residuals, status) {
+    .Call(`_riskRegression_getInfluenceFunctionBrierCVCensoringKM`, tau, time, residuals, status)
 }
 
 calcE_cpp <- function(eventtime, status, eXb, X, p, add0) {

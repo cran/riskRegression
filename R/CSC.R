@@ -21,7 +21,7 @@
 #' also a Cox regression model for event-free survival.
 #' @param fitter Routine to fit the Cox regression models.
 #' If \code{coxph} use \code{survival::coxph} else use \code{rms::cph}.
-#' @param ... Arguments given to \code{coxph}.
+#' @param ... Arguments given to \code{fitter}, e.g., \code{coxph}.
 #' @return \item{models }{a list with the fitted (cause-specific) Cox
 #' regression objects} \item{response }{the event history response }
 #' \item{eventTimes }{the sorted (unique) event times } \item{surv.type }{the
@@ -164,7 +164,7 @@ CSC <- function(formula,
             entry <- NULL
         }
     }
-    if (any(entry>time)) stop("entry > time detected. Entry into the study must come first.")
+    if (any(entry>time)) stop("entry > time detected. Entry time into the study must be strictly greater than outcome time.")
     ## remove event history variables from data
     if(any((this <- match(all.vars(Rform),names(data),nomatch=0))>0)){
         if (data.table::is.data.table(data))
@@ -218,13 +218,6 @@ CSC <- function(formula,
         } else{
             causeX <- theCause
         }
-        ## EHF <- prodlim::EventHistory.frame(formula=formula[[x]],data=data,unspecialsDesign=FALSE,specialsFactor=FALSE,specials="strata",stripSpecials="strata",stripArguments=list("strata"=NULL),specialsDesign=FALSE)
-        ## if (is.null(EHF$strata))
-        ## covData <- cbind(EHF$design)
-        ## else
-        ## covData <- cbind(EHF$design,EHF$strata)
-        ## time <- as.numeric(EHF$event.history[, "time",drop=TRUE])
-        ## event <- prodlim::getEvent(EHF$event.history)
         if (surv.type=="hazard"){
             statusX <- as.numeric(event==causeX)
         }else{
@@ -251,7 +244,16 @@ CSC <- function(formula,
             survresponse <- "survival::Surv(time, status)"
         else
             survresponse <- "survival::Surv(entry, time, status)"
-        formulaXX <- update(formula[[x]],paste0(survresponse,"~."))
+        ## check whether right hand side of formula includes ~.
+        allvars <- all.vars(formula[[x]])
+        if (any(grepl("^\\.$",allvars))){
+          formulaXX <- as.formula(paste0(survresponse,"~."))
+        }
+        else {
+          formulaXX <- update(formula[[x]],paste0(survresponse,"~."))
+        }
+        # previous
+        # formulaXX <- update(formula[[x]],paste0(survresponse,"~."))
         ## as.formula(paste(survresponse,
         ## as.character(delete.response(terms.formula(formulaX)))[[2]],
         ## sep="~"))

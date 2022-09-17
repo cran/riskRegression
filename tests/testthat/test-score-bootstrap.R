@@ -5,7 +5,7 @@ library(testthat)
 
 
 test_that("loob survival",{
-    set.seed(10)
+    set.seed(8)
     learndat=sampleData(200,outcome="survival")
     cox1a = coxph(Surv(time,event)~X6,data=learndat,x=TRUE,y=TRUE)
     cox2a = coxph(Surv(time,event)~X7+X8+X9,data=learndat,x=TRUE,y=TRUE)
@@ -16,13 +16,13 @@ test_that("loob survival",{
     loob.se1 <- Score(list("COX1"=cox1a,"COX2"=cox2a),formula=Surv(time,event)~1,data=learndat,times=5,split.method="loob",B=100,se.fit=TRUE)
     ## set.seed(5)
     ## loob.se1 <- Score(list("COX1"=cox1a,"COX2"=cox2a),formula=Surv(time,event)~1,data=learndat,times=5,split.method="loob",B=100,se.fit=TRUE,metrics="brier",conservative=TRUE)
-    expect_equal(loob.se0$AUC$contrasts$delta,loob.se1$AUC$contrasts$delta)
-    expect_equal(loob.se0$Brier$contrasts$delta,loob.se1$Brier$contrasts$delta)
+    expect_equal(ignore_attr=TRUE,loob.se0$AUC$contrasts$delta,loob.se1$AUC$contrasts$delta)
+    expect_equal(ignore_attr=TRUE,loob.se0$Brier$contrasts$delta,loob.se1$Brier$contrasts$delta)
 })
 
 if(FALSE){ ## [:failed test:]
-    test_that("bootcv survival (multi.state.test)",{
-        set.seed(10)
+test_that("bootcv survival (multi.state.test)",{
+    set.seed(8)
     learndat=sampleData(200,outcome="survival")
     learndat[,eventtime:=NULL]
     learndat[,censtime:=NULL]
@@ -42,14 +42,14 @@ if(FALSE){ ## [:failed test:]
     bootcv <- list(bootcv.se0,bootcv.se1,bootcv.se2,bootcv.se3)
     ## delta
     for (i in 1:4)
-        for (j in 2:4) 
+        for (j in 2:4)
             for (m in c("AUC","Brier"))
-                expect_equal(bootcv[[i]][[m]]$contrasts$delta,bootcv[[j]][[m]]$contrasts$delta)
+                expect_equal(ignore_attr=TRUE,bootcv[[i]][[m]]$contrasts$delta,bootcv[[j]][[m]]$contrasts$delta)
     ## lower, upper
     for (m in c("AUC","Brier"))
-        expect_equal(bootcv[[2]][[m]]$contrasts[,.(lower,upper)],bootcv[[4]][[m]]$contrasts[,.(lower,upper)])
+        expect_equal(ignore_attr=TRUE,bootcv[[2]][[m]]$contrasts[,.(lower,upper)],bootcv[[4]][[m]]$contrasts[,.(lower,upper)])
     ## p-value
     ## for (m in c("AUC","Brier"))
-        ## expect_equal(bootcv[[3]][[m]]$contrasts[,.(p)],bootcv[[4]][[m]]$contrasts[,.(p)])
+        ## expect_equal(ignore_attr=TRUE,bootcv[[3]][[m]]$contrasts[,.(p)],bootcv[[4]][[m]]$contrasts[,.(p)])
 })
 }

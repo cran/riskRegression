@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Feb 27 2022 (09:12) 
 ## Version: 
-## Last-Updated: Mar  7 2022 (08:33) 
+## Last-Updated: Sep 16 2022 (19:44) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 10
+##     Update #: 25
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -24,6 +24,7 @@ getPerformanceData <- function(testdata,
                                debug,
                                times,
                                cause,
+                               levs,
                                labels,
                                predictRisk.args,
                                nullobject,
@@ -31,11 +32,10 @@ getPerformanceData <- function(testdata,
                                object,
                                object.classes,
                                NT){
-    ID=model=NULL
+    ID=model = risk = NULL
     # inherit everything else from parent frame: object, nullobject, NF, NT, times, cause, response.type, etc.
     Brier=IPA=IBS=NULL
     looping <- !is.null(traindata)
-    ## if (!looping) b=0
     N <- as.numeric(NROW(testdata))
     # split data vertically into response and predictors X
     response <- testdata[,1:response.dim,with=FALSE]
@@ -44,7 +44,6 @@ getPerformanceData <- function(testdata,
     X <- testdata[,-c(1:response.dim),with=FALSE]
     ## restore sanity
     setnames(X,sub("^protectedName.","",names(X)))
-    ## if (debug) if (looping) message(paste0("Loop round: ",b))
     if (debug) message("extracted test set and prepared output object")
     # }}}
     # {{{ collect pred as long format data.table
@@ -62,7 +61,7 @@ getPerformanceData <- function(testdata,
         ## trainX <- copy(traindata)
         trainX[,ID:=NULL]
     }
-    pred <- data.table::rbindlist(lapply(labels, function(f){
+    pred <- data.table::rbindlist(lapply(levs, function(f){
         ## add object specific arguments to predictRisk methods
         if (f[1]>0 && (length(extra.args <- unlist(lapply(object.classes[[f]],function(cc){predictRisk.args[[cc]]})))>0)){
             args <- c(args,extra.args)
@@ -87,10 +86,10 @@ getPerformanceData <- function(testdata,
         }else{
             # predictions given as model which needs training in crossvalidation loops
             if (looping){
+                # browser(skipCalls = 1)
                 set.seed(trainseed)
                 if (f==0) model.f=nullobject[[1]] else model.f=object[[f]]
                 model.f$call$data <- trainX
-                # browser(skipCalls = 1)
                 trained.model <- try(eval(model.f$call),silent=TRUE)
                 if (inherits(x=trained.model,what="try-error")){
                     message(paste0("Failed to train the following model:"))
@@ -118,6 +117,15 @@ getPerformanceData <- function(testdata,
             out
         }
     }))
+    if (any(is.na(pred$risk))) {
+        pred[,model:=factor(model,levels=levs,labels)]
+        if (response.type[1] == "binary"){
+            print(pred[is.na(risk),data.table::data.table("sum(NA)" = .N),by = list(model)])
+            stop("Missing values in predicted risk detected.")
+        } else
+            print(pred[is.na(risk),data.table::data.table("sum(NA)" = .N),by = list(model,times)])
+        stop("Missing values in predicted risk detected.")
+    }
     if (debug) message("trained the model(s) and extracted the predictions")
     # }}}
     # {{{ merge with Weights (IPCW inner loop)
