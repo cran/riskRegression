@@ -40,6 +40,7 @@ Score(object, ...)
   keep,
   predictRisk.args,
   debug = 0L,
+  saveCoxMemory = FALSE,
   ...
 )
 }
@@ -182,6 +183,8 @@ randomly splitting (bootstrapping) the data during cross-validation.}
  A more flexible approach is to write a new predictRisk S3-method. See Details.}
 
 \item{debug}{Logical. If \code{TRUE} indicate landmarks in progress of the program.}
+
+\item{saveCoxMemory}{If \code{TRUE}, save memory by not storing the influence function of the cumulative hazard of the censoring as a matrix when calculating standard errors with Cox censoring. This can allow one to use \code{Score} on larger test data sets, but may be slower.}
 }
 \value{
 List with scores and assessments of contrasts, i.e.,
@@ -324,11 +327,37 @@ trainSurv <- sampleData(100,outcome="survival")
 testSurv <- sampleData(40,outcome="survival")
 cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=trainSurv, y=TRUE, x = TRUE)
 cox2 = coxph(Surv(time,event)~X3+X5+X6,data=trainSurv, y=TRUE, x = TRUE)
+x=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+         formula=Surv(time,event)~1,data=testSurv,conf.int=FALSE,times=c(5,8))
+## Use Cox to estimate censoring weights
+y=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+         formula=Surv(time,event)~X1+X8,data=testSurv,conf.int=FALSE,times=c(5,8)) 
+## Use GLMnet to estimate censoring weights
+z=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+         formula=Surv(time,event)~X1+X8,cens.model = "GLMnet",data=testSurv,
+         conf.int=FALSE,times=c(5,8)) 
+## Use hal9001 to estimate censoring weights
+w=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+         formula=Surv(time,event)~X1+X8,cens.model = "Hal9001",data=testSurv,
+         conf.int=FALSE,times=c(5,8)) 
+x
+y
+z
+w
+}
+
+\dontrun{library(survival)
+library(rms)
+library(prodlim)
+set.seed(18)
+trainSurv <- sampleData(100,outcome="survival")
+testSurv <- sampleData(40,outcome="survival")
+cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=trainSurv, y=TRUE, x = TRUE)
+cox2 = coxph(Surv(time,event)~X3+X5+X6,data=trainSurv, y=TRUE, x = TRUE)
 xs=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
          formula=Surv(time,event)~1,data=testSurv,conf.int=FALSE,times=c(5,8))
 xs
 }
-
 # Integrated Brier score
 \dontrun{
 xs=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
@@ -371,8 +400,8 @@ Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
 
     # competing risks outcome
     set.seed(18)
-    trainCR <- sampleData(40,outcome="competing.risks")
-    testCR <- sampleData(40,outcome="competing.risks")
+    trainCR <- sampleData(400,outcome="competing.risks")
+    testCR <- sampleData(400,outcome="competing.risks")
     library(riskRegression)
     library(cmprsk)
     # Cause-specific Cox regression

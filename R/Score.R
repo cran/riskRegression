@@ -113,6 +113,7 @@
 ##' \code{"residuals"} provides Brier score residuals and
 ##' \code{"splitindex"} provides sampling index used to split the data into training and validation sets.
 ##' \code{"vcov"} provides the variance-covariance matrix of the estimated parameters.
+##' @param saveCoxMemory If \code{TRUE}, save memory by not storing the influence function of the cumulative hazard of the censoring as a matrix when calculating standard errors with Cox censoring. This can allow one to use \code{Score} on larger test data sets, but may be slower.
 ##' @param predictRisk.args
 ##'  A list of argument-lists to control how risks are predicted.
 ##'  The names of the lists should be the S3-classes of the \code{object}.
@@ -246,11 +247,37 @@
 ##' testSurv <- sampleData(40,outcome="survival")
 ##' cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=trainSurv, y=TRUE, x = TRUE)
 ##' cox2 = coxph(Surv(time,event)~X3+X5+X6,data=trainSurv, y=TRUE, x = TRUE)
+##' x=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+##'          formula=Surv(time,event)~1,data=testSurv,conf.int=FALSE,times=c(5,8))
+##' ## Use Cox to estimate censoring weights
+##' y=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+##'          formula=Surv(time,event)~X1+X8,data=testSurv,conf.int=FALSE,times=c(5,8)) 
+##' ## Use GLMnet to estimate censoring weights
+##' z=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+##'          formula=Surv(time,event)~X1+X8,cens.model = "GLMnet",data=testSurv,
+##'          conf.int=FALSE,times=c(5,8)) 
+##' ## Use hal9001 to estimate censoring weights
+##' w=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
+##'          formula=Surv(time,event)~X1+X8,cens.model = "Hal9001",data=testSurv,
+##'          conf.int=FALSE,times=c(5,8)) 
+##' x
+##' y
+##' z
+##' w
+##' }
+##'
+##' \dontrun{library(survival)
+##' library(rms)
+##' library(prodlim)
+##' set.seed(18)
+##' trainSurv <- sampleData(100,outcome="survival")
+##' testSurv <- sampleData(40,outcome="survival")
+##' cox1 = coxph(Surv(time,event)~X1+X2+X7+X9,data=trainSurv, y=TRUE, x = TRUE)
+##' cox2 = coxph(Surv(time,event)~X3+X5+X6,data=trainSurv, y=TRUE, x = TRUE)
 ##' xs=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
 ##'          formula=Surv(time,event)~1,data=testSurv,conf.int=FALSE,times=c(5,8))
 ##' xs
 ##' }
-##'
 ##' # Integrated Brier score
 ##' \dontrun{
 ##' xs=Score(list("Cox(X1+X2+X7+X9)"=cox1,"Cox(X3+X5+X6)"=cox2),
@@ -293,8 +320,8 @@
 ##'
 ##'     # competing risks outcome
 ##'     set.seed(18)
-##'     trainCR <- sampleData(40,outcome="competing.risks")
-##'     testCR <- sampleData(40,outcome="competing.risks")
+##'     trainCR <- sampleData(400,outcome="competing.risks")
+##'     testCR <- sampleData(400,outcome="competing.risks")
 ##'     library(riskRegression)
 ##'     library(cmprsk)
 ##'     # Cause-specific Cox regression
@@ -445,8 +472,8 @@ Score.list <- function(object,
                        keep,
                        predictRisk.args,
                        debug=0L,
+                       saveCoxMemory = FALSE,
                        ...){
-
     se.conservative=IPCW=IF.AUC.conservative=IF.AUC0=IF.AUC=IC0=Brier=AUC=casecontrol=se=nth.times=time=status=ID=WTi=risk=IF.Brier=lower=upper=crossval=b=time=status=model=reference=p=model=pseudovalue=ReSpOnSe=residuals=event=j=NULL
 
     # }}}
@@ -505,6 +532,19 @@ Score.list <- function(object,
             cens.model <- "KaplanMeier"
         }
     }
+    ### 
+    if (cens.model != "cox" && cens.model != "none" && cens.model != "KaplanMeier" && cens.model != "discrete"){
+      if (!conservative[[1]]){
+        warning("For this model, we can't calculate the IF of the Survival function of the censoring distribution. \n Therefore, force conservative = TRUE")
+        conservative[[1]] <- TRUE
+      }
+      passed.args <- names(as.list(match.call())[-1])
+      if ("split.method" %in% passed.args){
+        stop("Cross validation does not work with custom models for the censoring. ")
+      }
+    }  
+  
+    
     # }}}
     # {{{ Response
     if (missing(formula)){stop("Argument formula is missing.")}
@@ -515,7 +555,10 @@ Score.list <- function(object,
         stop("Invalid specification of formula.\n Could be that you forgot the right hand side:\n ~covariate1 + covariate2 + ...?\nNote that any subsetting, ie data$var or data[,\"var\"], is not supported by this function.")
     }
     if (missing(data)){stop("Argument data is missing.")}
-    data <- data.table(data)
+    if (data.table::is.data.table(data))
+        data <- copy(data)
+    else
+        data <- data.table::setDT(data)
     responseFormula <- stats::update(formula,~1)
     ## if (missing(event)) event <- 1
     responsevars <- all.vars(responseFormula)
@@ -590,7 +633,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
     if (is.null(cens.type)) cens.type <- "uncensored"
     rm(response)
     # }}}
-# {{{ SplitMethod & parallel stuff
+    # {{{ SplitMethod & parallel stuff
 
     if (!missing(seed)) {
         ## message("Random seed set to control split of data: seed=",seed)
@@ -642,7 +685,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
     }
 
     # }}}
-# {{{ Checking the ability of the elements of object to predict risks
+    # {{{ Checking the ability of the elements of object to predict risks
     # {{{ number of models and their labels
     NF <- length(object)
     # }}}
@@ -673,8 +716,8 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
                        sep=""))
         }
     })
-# }}}
-# {{{ additional arguments for predictRisk methods
+    # }}}
+    # {{{ additional arguments for predictRisk methods
     if (!missing(predictRisk.args)){
         if (!(all(names(predictRisk.args) %in% unlist(object.classes))))
             stop(paste0("Argument predictRisk.args should be a list whose names match the S3-classes of the argument object.
@@ -687,7 +730,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
         predictRisk.args <- NULL
     }
     # }}}
-# {{{ add null model and check resampling ability
+    # {{{ add null model and check resampling ability
     if (!is.null(nullobject)) {
         mlevs <- 0:NF
         mlabels <- c(names(nullobject),names(object))
@@ -703,7 +746,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
         })
     }
     # }}}
-# {{{ resolve keep statements
+    # {{{ resolve keep statements
     if (!missing(keep) && is.character(keep)){
         if("residuals" %in% tolower(keep)) keep.residuals=TRUE else keep.residuals = FALSE
         if("vcov" %in% tolower(keep)) keep.vcov=TRUE else keep.vcov = FALSE
@@ -716,7 +759,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
         keep.splitindex=FALSE
     }
     # }}}
-# {{{ resolve se.fit and contrasts
+    # {{{ resolve se.fit and contrasts
     if (missing(se.fit)){
         if (is.logical(conf.int)[[1]] && conf.int[[1]]==FALSE
             || conf.int[[1]]<=0
@@ -761,7 +804,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
         }
     }
     # }}}
-# {{{ Evaluation landmarks and horizons (times)
+    # {{{ Evaluation landmarks and horizons (times)
     if (response.type %in% c("survival","competing.risks")){
         ## in case of a tie, events are earlier than right censored
         eventTimes <- unique(data[,time])
@@ -808,24 +851,14 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
     # {{{ Dealing with censored data outside the loop
     if (response.type %in% c("survival","competing.risks")){
         if (cens.type=="rightCensored"){
-            if (se.fit[1]>0L && ("AUC" %in% metrics)) {
-                ## FIXME: need conservative formula for AUC
-                if (conservative[[1]]){
-                  warning("Cannot do conservative for AUC. Therefore, force conservative to be FALSE.")
-                  conservative[[1]] <- FALSE
-                }
-                else if (cens.model[[1]] == "cox" && !(split.method$name %in% c("LeaveOneOutBoot","BootCv"))){
-                  warning("Cannot (not yet) estimate standard errors for AUC with Cox IPCW.\nTherefore, force cens.model to be marginal.")
-                  cens.model <- "KaplanMeier"
-                }
-            }
             getIC <- se.fit[[1]] && !conservative[[1]] && cens.model != "KaplanMeier"
             Weights <- getCensoringWeights(formula=formula,
                                            data=data,
                                            times=times,
                                            cens.model=cens.model,
                                            response.type=response.type,
-                                           influence.curve=getIC)
+                                           influence.curve=getIC, 
+                                           saveCoxMemory = saveCoxMemory)
             ##split.method$internal.name %in% c("noplan",".632+")
             ## if cens.model is marginal then IC is a matrix (ntimes,newdata)
             ## if cens.model is Cox then IC is an array (nlearn, ntimes, newdata)
@@ -835,12 +868,6 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
             if (cens.type=="uncensored"){
                 cens.method <- "none"
                 cens.model <- "none"
-                # if ("AUC" %in% metrics){
-                #     if (se.fit==TRUE) {
-                #         #warning("Standard error for AUC with uncensored time-to-event outcome not yet implemented.")
-                #         #se.fit <- FALSE
-                #     }
-                # }
                 Weights <- NULL
             }
             else{
@@ -1032,6 +1059,8 @@ if (split.method$internal.name%in%c("BootCv","LeaveOneOutBoot","crossval")){
             } else {
                 testweights <- NULL
             }
+            ## print(class(traindata))
+            ## print(names(traindata))
             DT.b <- getPerformanceData(testdata=testdata,
                                        testweights=testweights,
                                        traindata=traindata,

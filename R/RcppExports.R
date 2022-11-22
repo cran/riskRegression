@@ -5,22 +5,6 @@ AUCijFun <- function(riskCase, riskControl) {
     .Call(`_riskRegression_AUCijFun`, riskCase, riskControl)
 }
 
-#' @title Influence function for Nelson-Aalen estimator.
-#' 
-#' @description Fast computation of influence function for Nelson-Aalen estimator of the censoring times
-#' @param time sorted vector of event times. Sorted according to time and -status so that events come first a tied times.
-#' @param status sorted vector of 0 = censored or 1 = event (any cause). Sorted according to time and -status so that events come first a tied times.
-#' @return A square matrix where each column corresponds to a subject and each row to a time point. 
-#' @author Thomas Alexander Gerds <tag@@biostat.ku.dk>
-#' @examples
-#' time = c(1,3,3,4)
-#' status = c(1,0,1,1)
-#' IC_Nelson_Aalen_cens_time(time,status)
-#' @export
-IC_Nelson_Aalen_cens_time <- function(time, status) {
-    .Call(`_riskRegression_IC_Nelson_Aalen_cens_time`, time, status)
-}
-
 #' @title C++ Fast Baseline Hazard Estimation
 #' @description C++ function to estimate the baseline hazard from a Cox Model
 #'
@@ -76,41 +60,6 @@ colCumSum <- function(x) {
     .Call(`_riskRegression_colCumSum`, x)
 }
 
-#' Apply cumprod in each column 
-#'
-#' @description Fast computation of apply(x,2,cumprod)
-#' @param x A matrix.
-#' @return A matrix of same size as x.
-#' @author Thomas Alexander Gerds <tag@@biostat.ku.dk>
-#' @examples
-#' x <- matrix(1:8,ncol=2)
-#' colCumProd(x)
-#' @export
-colCumProd <- function(x) {
-    .Call(`_riskRegression_colCumProd`, x)
-}
-
-#' Apply crossprod and colSums 
-#'
-#' @description Fast computation of crossprod(colSums(X),Y) 
-#' @param X A matrix with dimensions k*n. Hence the result of \code{colSums(X)} has length n.
-#' @param Y A matrix with dimenions n*m. Can be a matrix with dimension m*n but then \code{transposeY} should be \code{TRUE}.
-#' @param transposeY Logical. If \code{TRUE} transpose Y before matrix multiplication.
-#' @return A vector of length m.
-#' @author Thomas Alexander Gerds <tag@@biostat.ku.dk>
-#' @examples
-#' x <- matrix(1:8,ncol=2)
-#' y <- matrix(1:16,ncol=8)
-#' colSumsCrossprod(x,y,0)
-#' 
-#' x <- matrix(1:8,ncol=2)
-#' y <- matrix(1:16,ncol=2)
-#' colSumsCrossprod(x,y,1)
-#' @export
-colSumsCrossprod <- function(X, Y, transposeY) {
-    .Call(`_riskRegression_colSumsCrossprod`, X, Y, transposeY)
-}
-
 quantileProcess_cpp <- function(nSample, nContrast, nSim, iid, alternative, global, confLevel) {
     .Call(`_riskRegression_quantileProcess_cpp`, nSample, nContrast, nSim, iid, alternative, global, confLevel)
 }
@@ -123,16 +72,20 @@ sampleMaxProcess_cpp <- function(nSample, nContrast, nSim, value, iid, alternati
     .Call(`_riskRegression_sampleMaxProcess_cpp`, nSample, nContrast, nSim, value, iid, alternative, type, global)
 }
 
-getInfluenceFunctionAUCKMCensoring <- function(time, status, tau, risk, GTiminus, Gtau, auc, tiedValues) {
-    .Call(`_riskRegression_getInfluenceFunctionAUCKMCensoring`, time, status, tau, risk, GTiminus, Gtau, auc, tiedValues)
+getIC0AUC <- function(time, status, tau, risk, GTiminus, Gtau, auc) {
+    .Call(`_riskRegression_getIC0AUC`, time, status, tau, risk, GTiminus, Gtau, auc)
+}
+
+getInfluenceFunctionAUCKMCensoringTerm <- function(time, status, tau, ic0Case, ic0Controls, weights, firsthit, muCase, muControls, nu1, Gtau, auc) {
+    .Call(`_riskRegression_getInfluenceFunctionAUCKMCensoringTerm`, time, status, tau, ic0Case, ic0Controls, weights, firsthit, muCase, muControls, nu1, Gtau, auc)
 }
 
 getInfluenceFunctionAUCKMCensoringCVPart <- function(time, status, tau, GTiminus, Gtau, aucMat, nu1tauPm) {
     .Call(`_riskRegression_getInfluenceFunctionAUCKMCensoringCVPart`, time, status, tau, GTiminus, Gtau, aucMat, nu1tauPm)
 }
 
-getInfluenceFunctionBrierKMCensoringUseSquared <- function(tau, time, residuals, status) {
-    .Call(`_riskRegression_getInfluenceFunctionBrierKMCensoringUseSquared`, tau, time, residuals, status)
+getInfluenceFunctionBrierKMCensoringTerm <- function(tau, time, residuals, status) {
+    .Call(`_riskRegression_getInfluenceFunctionBrierKMCensoringTerm`, tau, time, residuals, status)
 }
 
 calcE_cpp <- function(eventtime, status, eXb, X, p, add0) {
@@ -145,26 +98,6 @@ IFbeta_cpp <- function(newT, neweXb, newX, newStatus, newIndexJump, S01, E1, tim
 
 IFlambda0_cpp <- function(tau, IFbeta, newT, neweXb, newStatus, newStrata, newIndexJump, S01, E1, time1, lastTime1, lambda0, p, strata, minimalExport) {
     .Call(`_riskRegression_IFlambda0_cpp`, tau, IFbeta, newT, neweXb, newStatus, newStrata, newIndexJump, S01, E1, time1, lastTime1, lambda0, p, strata, minimalExport)
-}
-
-columnMeanWeight <- function(A, x) {
-    .Call(`_riskRegression_columnMeanWeight`, A, x)
-}
-
-T3CalculationHelper <- function(x, A) {
-    .Call(`_riskRegression_T3CalculationHelper`, x, A)
-}
-
-htijCalculationHelper <- function(mcase, mcontrol, wcase, wcontrol, n, nrows, ncols) {
-    .Call(`_riskRegression_htijCalculationHelper`, mcase, mcontrol, wcase, wcontrol, n, nrows, ncols)
-}
-
-rowSumsCrossprodSpec <- function(X, Y) {
-    .Call(`_riskRegression_rowSumsCrossprodSpec`, X, Y)
-}
-
-colSumsCrossprodSpec <- function(X, Y) {
-    .Call(`_riskRegression_colSumsCrossprodSpec`, X, Y)
 }
 
 predictCIF_cpp <- function(hazard, cumhazard, eXb, strata, newtimes, etimes, etimeMax, t0, nEventTimes, nNewTimes, nData, cause, nCause, survtype, productLimit, diag, exportSurv) {
@@ -183,20 +116,6 @@ predictCIF_cpp <- function(hazard, cumhazard, eXb, strata, newtimes, etimes, eti
 #' @export
 rowCumSum <- function(x) {
     .Call(`_riskRegression_rowCumSum`, x)
-}
-
-#' Apply cumprod in each row 
-#'
-#' @description Fast computation of t(apply(x,1,cumprod))
-#' @param x A matrix.
-#' @return A matrix of same size as x.
-#' @author Thomas Alexander Gerds <tag@@biostat.ku.dk>
-#' @examples
-#' x <- matrix(1:8,ncol=2)
-#' rowCumProd(x)
-#' @export
-rowCumProd <- function(x) {
-    .Call(`_riskRegression_rowCumProd`, x)
 }
 
 #' Apply crossprod and rowSums
@@ -319,40 +238,6 @@ NULL
 #' 
 NULL
 
-#' @title Apply * by slice
-#' @description Fast computation of sweep(X, MARGIN = 1:2, FUN = "*", STATS = scale)
-#' @name sliceMultiply_cpp
-#' 
-#' @param X An array.
-#' @param M A matrix with the same number of row and columns as X.
-#' 
-#' @return An array of same size as X.
-#' @author Brice Ozenne <broz@@sund.ku.dk>
-#' @examples
-#' x <- array(1, dim = c(2,6,5))
-#' M <- matrix(1:12,2,6)
-#' sweep(x, MARGIN = 1:2, FUN = "*", STATS = M)
-#' sliceMultiply_cpp(x, M) 
-#' 
-NULL
-
-#' @title Apply / by slice
-#' @description Fast computation of sweep(X, MARGIN = 1:2, FUN = "/", STATS = scale)
-#' @name sliceScale_cpp
-#' 
-#' @param X An array.
-#' @param M A matrix with the same number of row and columns as X.
-#' 
-#' @return An array of same size as X.
-#' @author Brice Ozenne <broz@@sund.ku.dk>
-#' @examples
-#' x <- array(1, dim = c(2,6,5))
-#' M <- matrix(1:12,2,6)
-#' sweep(x, MARGIN = 1:2, FUN = "/", STATS = M)
-#' sliceScale_cpp(x, M) 
-#' 
-NULL
-
 #' @rdname colCenter_cpp
 #' @export
 colCenter_cpp <- function(X, center) {
@@ -389,27 +274,7 @@ rowMultiply_cpp <- function(X, scale) {
     .Call(`_riskRegression_rowMultiply_cpp`, X, scale)
 }
 
-#' @rdname sliceMultiply_cpp
-#' @export
-sliceMultiply_cpp <- function(X, M) {
-    .Call(`_riskRegression_sliceMultiply_cpp`, X, M)
-}
-
-#' @rdname sliceMultiply_cpp
-#' @export
-sliceMultiplyPointer_cpp <- function(X, M) {
-    invisible(.Call(`_riskRegression_sliceMultiplyPointer_cpp`, X, M))
-}
-
-#' @rdname sliceScale_cpp
-#' @export
-sliceScale_cpp <- function(X, M) {
-    .Call(`_riskRegression_sliceScale_cpp`, X, M)
-}
-
-#' @rdname sliceScale_cpp
-#' @export
-sliceScalePointer_cpp <- function(X, M) {
-    invisible(.Call(`_riskRegression_sliceScalePointer_cpp`, X, M))
+weightedAverageIFCumhazard_cpp <- function(seqTau, cumhazard0, newX, neweXb, IFbeta, cumEhazard0, cumhazard_iS0, delta_iS0, sample_eXb, sample_time, indexJumpSample_time, jump_time, indexJumpTau, lastSampleTime, newdata_index, nTau, nSample, nStrata, p, diag, debug, weights, isBeforeTau, tau) {
+    .Call(`_riskRegression_weightedAverageIFCumhazard_cpp`, seqTau, cumhazard0, newX, neweXb, IFbeta, cumEhazard0, cumhazard_iS0, delta_iS0, sample_eXb, sample_time, indexJumpSample_time, jump_time, indexJumpTau, lastSampleTime, newdata_index, nTau, nSample, nStrata, p, diag, debug, weights, isBeforeTau, tau)
 }
 

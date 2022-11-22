@@ -31,6 +31,7 @@
 \alias{predictRisk.numeric}
 \alias{predictRisk.formula}
 \alias{predictRisk.BinaryTree}
+\alias{predictRisk.comprisk}
 \alias{predictRisk.coxphTD}
 \alias{predictRisk.CSCTD}
 \alias{predictRisk.coxph.penal}
@@ -38,6 +39,7 @@
 \alias{predictRisk.penfitS3}
 \alias{predictRisk.SuperPredictor}
 \alias{predictRisk.Hal9001}
+\alias{predictRisk.GLMnet}
 \alias{predictRisk.singleEventCB}
 \alias{predictRisk.wglm}
 \title{Extrating predicting risks from regression models}
@@ -71,6 +73,8 @@ predictRisk(object, newdata, ...)
 \method{predictRisk}{aalen}(object, newdata, times, ...)
 
 \method{predictRisk}{cox.aalen}(object, newdata, times, ...)
+
+\method{predictRisk}{comprisk}(object, newdata, times, ...)
 
 \method{predictRisk}{coxph}(
   object,
@@ -139,6 +143,8 @@ predictRisk(object, newdata, ...)
 \method{predictRisk}{flexsurvreg}(object, newdata, times, ...)
 
 \method{predictRisk}{Hal9001}(object, newdata, times, cause, ...)
+
+\method{predictRisk}{GLMnet}(object, newdata, times, ...)
 
 \method{predictRisk}{singleEventCB}(object, newdata, times, cause, ...)
 
@@ -216,6 +222,11 @@ d <- sampleData(80,outcome="binary")
 nd <- sampleData(80,outcome="binary")
 fit <- lrm(Y~X1+X8,data=d)
 predictRisk(fit,newdata=nd)
+
+# GLMnet example
+fit <- GLMnet(Y~X1+X8,data=d) ## Uses CV as default
+predictRisk(fit,newdata=nd)
+
 \dontrun{
 library(SuperLearner)
 set.seed(1)
@@ -265,6 +276,16 @@ psurv <- predictRisk(fitCox,newdata=valdat,times=seq(0,60,12))
 ## one column for each of the 5 time points
 ## one row for each validation set individual
 
+# Use GLMnet to predict survvival probabilities
+fitGLMnet <- GLMnet(Surv(time,event)~X1+X8,data=learndat) ## Use CV as standard.
+psurv <- predictRisk(fitGLMnet,newdata=valdat,times=seq(0,60,12))
+
+# Use hal9001 as an example
+\dontrun{
+fitHAL <- Hal9001(Surv(time,event)~X1+X8,data=learndat) ## Use CV as standard.
+psurv <- predictRisk(fitHAL,newdata=valdat,times=seq(0,60,12))
+}
+
 if (require("randomForestSRC",quietly=TRUE)){
 # Do the same for a randomSurvivalForest model
 library(randomForestSRC)
@@ -284,6 +305,20 @@ plot(predictRisk(f1,newdata=valdat,times=10),
      ylab="Ridge predicted survival chance at 10")
 }
 
+# aalen model
+library(timereg)
+data(sTRACE)
+out <- aalen(Surv(time, status==9) ~ sex + diabetes + chf + vf,
+             data=sTRACE, max.time=7, n.sim=0, resample.iid=1)
+print(methods(predictRisk))
+predictRisk(object=out, newdata=sTRACE[1:5,], times=c(1, 2, 3))
+# cox.aalen model
+library(timereg)
+data(sTRACE)
+out <- cox.aalen(Surv(time,status==9) ~ prop(age) + prop(sex) +
+                 prop(diabetes) + chf + vf,
+                 data=sTRACE, max.time=7, n.sim=0, resample.iid=1)
+predictRisk(object=out, newdata=sTRACE[1:5,], times=c(1, 2, 3))
 ## competing risks
 
 library(survival)
@@ -297,6 +332,13 @@ predictRisk(cox.fit,newdata=test,times=seq(1:10),cause=1)
 ## with strata
 cox.fit2  <- CSC(list(Hist(time,cause)~strata(X1)+X2,Hist(time,cause)~X1+X2),data=train)
 predictRisk(cox.fit2,newdata=test,times=seq(1:10),cause=1)
+
+
+library(timereg)
+data(bmt)
+add <- comp.risk(Event(time, cause) ~ platelet + age + tcell, data=bmt, cause=1)
+ndata <- data.frame(platelet=c(1, 0, 0), age=c(0, 1, 0), tcell=c(0, 0, 1))
+predictRisk(object=add, newdata=ndata, times=c(1, 2, 3))
 
 }
 \author{
