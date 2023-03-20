@@ -70,7 +70,7 @@
 ##' @param multi.split.test Logical or \code{0} or \code{1}. If \code{FALSE} or \code{0} do not calculate multi-split tests. This argument is ignored when \code{split.method} is "none".
 ##' @param conf.int Either logical or a numeric value between 0 and 1. In right censored data,
 ##'     confidence intervals are based on Blanche et al (see references). Setting \code{FALSE} prevents the
-##'     computation confidence intervals. \code{TRUE} means compute 95 percent confidence
+##'     computation of confidence intervals. \code{TRUE} computes 95 percent confidence
 ##'     intervals and corresponding p-values for AUC and Brier score. If set to 0.87, the
 ##'     level of significance is 13 percent. So, do not set it to 0.87.
 ##' @param contrasts Either logical or a list of contrasts. A list of contrasts defines which risk prediction models (markers)
@@ -93,13 +93,15 @@
 ##'     Here IPCW refers to inverse probability of censoring weights and \code{pseudo} for jackknife pseudo values.
 ##'     Right now pseudo values  are only used for calibration curves.
 ##' @param cens.model Model for estimating inverse probability of
-##'     censored weights. Implemented are the Kaplan-Meier method (\code{"km"}) and
+##'     censored weights (IPCW). Implemented are the Kaplan-Meier method (\code{"km"}) and
 ##' Cox regression (\code{"cox"}) both applied to the censored times. If the right hand side of \code{formula} does not specify covariates,
-##' the Kaplan-Meier method is used even if this argument is set to \code{"cox"}.
-##' @param split.method Method for cross-validation. Right now the only choice is \code{bootcv} in which case bootstrap learning sets
+##' the Kaplan-Meier method is used even if this argument is set to \code{"cox"}. Also implemented is a template for users specifying other models to estimate the IPCW. Here the user
+##' should be supply a function, taking as input a \code{"formula"} and \code{"data"}. This does come at the cost of only being able to calculate conservative confidence intervals.
+##' @param split.method Method for cross-validation. Right now the only choices are \code{bootcv}, \code{cvk} and \code{loob}. In the first case, bootstrap learning sets
 ##' are drawn with our without replacement (argument \code{M}) from \code{data}. The data not included in the current bootstrap learning
-##' set are used as validation set to compute the prediction performance.
-##' @param B Number of bootstrap sets for cross-validation.
+##' set are used as validation set to compute the prediction performance. In the second case, k-fold cross-validation is performed. Note that k has to be an explicit number, e.g. 5 or 10,
+##' when passing this as an argument. In the third case, leave-one-out bootstrap cross-validation is performed for the Brier score and leave-pair-out bootstrap cross-validation is performed for the AUC.
+##' @param B Number of bootstrap sets for cross-validation. \code{B} should be set to 1, when k-fold cross-validation is used.
 ##' @param M Size of subsamples for bootstrap cross-validation. If specified it
 ##'     has to be an integer smaller than the size of \code{data}.
 ##' @param seed Super seed for setting training data seeds when
@@ -111,9 +113,13 @@
 ##' @param progress.bar Style for \code{txtProgressBar}. Can be 1,2,3 see \code{help(txtProgressBar)} or NULL to avoid the progress bar.
 ##' @param keep list of characters (not case sensitive) which determines additional output.
 ##' \code{"residuals"} provides Brier score residuals and
-##' \code{"splitindex"} provides sampling index used to split the data into training and validation sets.
+##' \code{"splitindex"} provides sampling index used to split the data into training and validation sets. It is a function, whose argument is the bootstrap sample, which one wishes to look at.
 ##' \code{"vcov"} provides the variance-covariance matrix of the estimated parameters.
-##' @param saveCoxMemory If \code{TRUE}, save memory by not storing the influence function of the cumulative hazard of the censoring as a matrix when calculating standard errors with Cox censoring. This can allow one to use \code{Score} on larger test data sets, but may be slower.
+##' @param censoring.save.memory Only relevant in censored data where censoring weigths are obtained with
+##' Cox regression and argument \code{conservative} is set to \code{FALSE}. If \code{TRUE}, save memory by not storing the influence function
+##' of the cumulative hazard of the censoring as a matrix when calculating standard errors
+##' with Cox censoring. This can allow one to use \code{Score} on larger test data sets,
+##' but may be slower.
 ##' @param predictRisk.args
 ##'  A list of argument-lists to control how risks are predicted.
 ##'  The names of the lists should be the S3-classes of the \code{object}.
@@ -235,6 +241,11 @@
 ##'              split.method="loob",
 ##'              B=100,plots="calibration")
 ##'     x2
+##'     ## 5-fold cross-validation
+##'     x3=Score(list("LR1"=lr1a,"LR2"=lr2a),formula=Y~1,data=learndat,
+##'              split.method="cv5",
+##'              B=1,plots="calibration")
+##'     x3
 ##' }
 ##' # survival outcome
 ##'
@@ -472,7 +483,7 @@ Score.list <- function(object,
                        keep,
                        predictRisk.args,
                        debug=0L,
-                       saveCoxMemory = FALSE,
+                       censoring.save.memory = FALSE,
                        ...){
     se.conservative=IPCW=IF.AUC.conservative=IF.AUC0=IF.AUC=IC0=Brier=AUC=casecontrol=se=nth.times=time=status=ID=WTi=risk=IF.Brier=lower=upper=crossval=b=time=status=model=reference=p=model=pseudovalue=ReSpOnSe=residuals=event=j=NULL
 
@@ -539,9 +550,6 @@ Score.list <- function(object,
         conservative[[1]] <- TRUE
       }
       passed.args <- names(as.list(match.call())[-1])
-      if ("split.method" %in% passed.args){
-        stop("Cross validation does not work with custom models for the censoring. ")
-      }
     }  
   
     
@@ -639,7 +647,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
         ## message("Random seed set to control split of data: seed=",seed)
         set.seed(seed)
     }
-    split.method <- getSplitMethod(split.method=split.method,B=B,N=N,M=M)
+    split.method <- getSplitMethod(split.method=split.method,B=B,N=N,M=M,seed=seed)
     B <- split.method$B
     splitIndex <- split.method$index
     do.resample <- !(is.null(splitIndex))
@@ -858,7 +866,7 @@ c.f., Chapter 7, Section 5 in Gerds & Kattan 2021. Medical risk prediction model
                                            cens.model=cens.model,
                                            response.type=response.type,
                                            influence.curve=getIC, 
-                                           saveCoxMemory = saveCoxMemory)
+                                           censoring.save.memory = censoring.save.memory)
             ##split.method$internal.name %in% c("noplan",".632+")
             ## if cens.model is marginal then IC is a matrix (ntimes,newdata)
             ## if cens.model is Cox then IC is an array (nlearn, ntimes, newdata)
@@ -996,7 +1004,7 @@ if (split.method$internal.name%in%c("BootCv","LeaveOneOutBoot","crossval")){
     if (split.method$internal.name == "crossval"){
         DT.B <- foreach::foreach (b=1:B,.export=exports,.packages="data.table",.errorhandling=errorhandling) %dopar%{
             ## repetitions of k-fold to avoid Monte-Carlo error
-            index.b <- split.method$index[,b] ## contains a sample of the numbers 1:k with replacement
+            index.b <- split.method$index(b) ## contains a sample of the numbers 1:k with replacement
             if((B>1) && !is.null(progress.bar)){setTxtProgressBar(pb, b)}
             DT.b <- rbindlist(lapply(1:split.method$k,function(fold){
                 traindata=data[index.b!=fold]
@@ -1045,9 +1053,9 @@ if (split.method$internal.name%in%c("BootCv","LeaveOneOutBoot","crossval")){
         DT.B <- foreach::foreach (b=1:B,.export=exports,.packages="data.table",.errorhandling=errorhandling) %dopar%{
             if(!is.null(progress.bar)){setTxtProgressBar(pb, b)}
             ## DT.B <- rbindlist(lapply(1:B,function(b){
-            traindata=data[split.method$index[,b]]
+            traindata=data[split.method$index(b)]
             ## setkey(traindata,ID)
-            testids <- (match(1:N,unique(split.method$index[,b]),nomatch=0)==0)
+            testids <- (match(1:N,unique(split.method$index(b)),nomatch=0)==0)
             ## NOTE: subset.data.table preserves order
             testdata <- subset(data,testids)
             if (cens.type=="rightCensored"){
@@ -1126,8 +1134,38 @@ if (split.method$internal.name%in%c("BootCv","LeaveOneOutBoot","crossval")){
     ## print(DT.B)
     # }}}
     # {{{ Leave-one-out bootstrap
-    ## start clause split.method$name=="LeaveOneOutBoot"
-    if (split.method$name=="LeaveOneOutBoot" | split.method$internal.name =="crossval"){  ## Testing if the crossval works in this loop
+    ## start clause split.method$name=="LeaveOneOutBoot
+    if (split.method$internal.name =="crossval" && B == 1){
+      crossvalPerf<-computePerformance(DT=DT.B,
+                                       N=N,
+                                       NT=NT,
+                                       NF=NF,
+                                       models=list(levels=mlevs,labels=mlabels),
+                                       response.type=response.type,
+                                       times=times,
+                                       jack=jack,
+                                       cens.type=cens.type,
+                                       cause=cause,
+                                       states=states,
+                                       alpha=alpha,
+                                       se.fit=se.fit,
+                                       conservative=conservative,
+                                       cens.model=cens.model,
+                                       multi.split.test=multi.split.test,
+                                       keep.residuals=FALSE,
+                                       keep.vcov=FALSE,
+                                       dolist=dolist,
+                                       probs=probs,
+                                       metrics=metrics,
+                                       plots=plots,
+                                       summary=summary,
+                                       ibs=ibs,
+                                       ipa=ipa,
+                                       ROC=FALSE,
+                                       MC=Weights$IC,
+                                       IC.data=Weights$IC.data)
+    }
+    else if (split.method$name=="LeaveOneOutBoot" | split.method$internal.name =="crossval"){  ## Testing if the crossval works in this loop
         message(paste0("Calculating the performance metrics in long format\nlevel-1 data with ",
                        NROW(DT.B),
                        " rows.",
