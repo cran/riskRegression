@@ -1,6 +1,6 @@
 # Function to calculate cross-validation performance
 
-crossvalPerf.loob.AUC <- function(times,mlevs,se.fit,response.type,NT,Response,cens.type,Weights,split.method,N,B,DT.B,data,dolist,alpha,byvars,mlabels,conservative,cens.model) {
+crossvalPerf.loob.AUC <- function(times,mlevs,se.fit,response.type,NT,Response,cens.type,Weights,split.method,N,B,DT.B,data,dolist,alpha,byvars,mlabels,conservative,cens.model,cause) {
   # initializing output
   bfold <- fold <- AUC <- ReSpOnSe <- status <- ID <- model <- b <- risk <- casecontrol <- IF.AUC <- IF.AUC0 <- se <- IF.AUC.conservative <- se.conservative <- lower <- upper <- NF <- reference  <-  event <- status0 <- NULL
   if (response.type=="binary") {
@@ -12,7 +12,7 @@ crossvalPerf.loob.AUC <- function(times,mlevs,se.fit,response.type,NT,Response,c
   ## for each pair of individuals sum the concordance of the bootstraps where *both* individuals are out-of-bag
   ## divide by number of times the pair is out-of-bag later
   aucDT <- NULL
-
+  
   redoSplitIndex <- function(x, N){
     res <- rep(TRUE, N)
     res[unique(x)] <- FALSE
@@ -30,6 +30,7 @@ crossvalPerf.loob.AUC <- function(times,mlevs,se.fit,response.type,NT,Response,c
     k <- split.method$k
     split.index <- do.call("cbind",lapply(1:k, function(i) ind.mat==i))
   }
+  cause <- as.numeric(cause)
   rm(ind.mat)
   for (s in 1:NT){
     if (response.type=="binary"){
@@ -42,8 +43,17 @@ crossvalPerf.loob.AUC <- function(times,mlevs,se.fit,response.type,NT,Response,c
       if (response.type == "survival"){
         Response$status0 <- Response$status
       }
-      else {
-        Response$status0 <- Response$status * Response$event
+      else { # competing risks
+        oldEvent <- Response$event
+        causeID <- oldEvent == cause
+        cause1ID <- oldEvent == 1
+        oldEvent[causeID] <- 1
+        oldEvent[cause1ID] <- cause
+        Response$status0 <- Response$status * oldEvent
+        # need a status variable with value
+        # 0 = censored
+        # 1 = cause of interest
+        # 2 = other causes
       }
       cases.index <- Response[,time<=t & status0==1]
       controls.index1 <- Response[,time>t]
@@ -120,7 +130,7 @@ crossvalPerf.loob.AUC <- function(times,mlevs,se.fit,response.type,NT,Response,c
                                       controls =controls.index,
                                       controls1 = controls.index1,
                                       controls2 = controls.index2)
-            icPart <- getInfluenceFunction.AUC.censoring.term(time = data[["time"]],
+            icPart <- getInfluenceFunction.AUC.censoring.term(time = Response[["time"]],
                                                               event = Response[["status0"]],
                                                               t= t,
                                                               IFcalculationList = IFcalculationList,
@@ -298,8 +308,6 @@ crossvalPerf.loob.Brier <- function(times,mlevs,se.fit,response.type,NT,Response
                                                 time=time,
                                                 IC0,
                                                 residuals=residuals,
-                                                WTi=WTi,
-                                                Wt=Wt,
                                                 IC.G=Weights$IC,
                                                 cens.model=cens.model,
                                                 conservative = conservative,
@@ -397,7 +405,7 @@ crossvalPerf.loob.Brier <- function(times,mlevs,se.fit,response.type,NT,Response
 
 crossvalPerf.loob <- function(m,times,mlevs,se.fit,response.type,NT,Response,cens.type,Weights,split.method,N,B,DT.B,data,dolist,alpha,byvars,mlabels,ipa,keep.residuals,conservative,cens.model,response.dim,ID,cause) {
   if (m=="AUC"){
-    return(crossvalPerf.loob.AUC(times,mlevs,se.fit,response.type,NT,Response,cens.type,Weights,split.method,N,B,DT.B,data,dolist,alpha,byvars,mlabels,conservative,cens.model))
+    return(crossvalPerf.loob.AUC(times,mlevs,se.fit,response.type,NT,Response,cens.type,Weights,split.method,N,B,DT.B,data,dolist,alpha,byvars,mlabels,conservative,cens.model,cause))
   }
   if (m=="Brier"){
     return(crossvalPerf.loob.Brier(times,mlevs,se.fit,response.type,NT,Response,cens.type,Weights,split.method,N,B,DT.B,data,dolist,alpha,byvars,mlabels,ipa,keep.residuals,conservative,cens.model,response.dim,ID,cause))

@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: jun  1 2018 (13:35) 
 ## Version: 
-## Last-Updated: Dec 21 2021 (12:28) 
-##           By: Brice Ozenne
-##     Update #: 47
+## Last-Updated: Sep  6 2023 (09:53) 
+##           By: Thomas Alexander Gerds
+##     Update #: 48
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -45,7 +45,7 @@ print.influenceTest <- function(x, digits = 3, ...){
     cat(x$name[2],":\n",sep="")
     print(x$call[[2]])
 
-    dt.tempo <- copy(x)
+    dt.tempo <- data.table::copy(x)
     dt.tempo <- as.data.table(dt.tempo)
     order.col <- setdiff(names(dt.tempo),c("lower","upper","p.value","quantileBand","lowerBand","upperBand"))
 

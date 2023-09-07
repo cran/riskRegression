@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: maj 23 2018 (14:08) 
 ## Version: 
-## Last-Updated: Feb 10 2023 (09:19) 
+## Last-Updated: Sep  6 2023 (09:53) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 1006
+##     Update #: 1007
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -86,7 +86,7 @@
 ##' dt.ate <- as.data.table(fit.ate)
 ##' 
 ##' ## manual calculation of se
-##' dd <- copy(d)
+##' dd <- data.table::copy(d)
 ##' dd$X1 <- rep(factor("T0", levels = paste0("T",0:2)), NROW(dd))
 ##' out <- predictCox(fit, newdata = dd, se = TRUE, times = 1:3, average.iid = TRUE)
 ##' term1 <- -out$survival.average.iid

@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Nov  4 2019 (09:07) 
 ## Version: 
-## Last-Updated: Jun 25 2020 (13:42) 
+## Last-Updated: Sep  6 2023 (09:53) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 20
+##     Update #: 21
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -29,7 +29,7 @@ print.IPA <- function(x,digits=2,...){
     if (missing(digits)){
         digits <- 1 
     }
-    X <- copy(x)
+    X <- data.table::copy(x)
     data.table::setDT(X)
     fmt <- paste0("%1.",digits[[1]],"f")
     X[,Brier:=sprintf(fmt=fmt,100*Brier)]

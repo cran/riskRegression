@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: maj 18 2017 (09:23) 
 ## Version: 
-## last-updated: Sep 17 2022 (07:00) 
+## last-updated: Sep  6 2023 (09:53) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 125
+##     Update #: 126
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -150,11 +150,11 @@ dt[ , X16 := X1*X6]
 dt[ , Xcat2 := as.factor(paste0(X1,X2))]
 
 ## sorted dataset
-dt.sort <- copy(dt)
+dt.sort <- data.table::copy(dt)
 setkeyv(dt.sort,c("time")) 
 
 ## dataset with ties
-dtTies <- copy(dt)[1:10,]
+dtTies <- data.table::copy(dt)[1:10,]
 dtTies[, event := 1]
 dtTies[7:8, X1 := 1]
 dtTies[7:8, X6 := 1]
@@ -162,9 +162,9 @@ setkeyv(dtTies, c("time"))
 dtTies[, timeTies := time]
 dtTies[7:8, timeTies := time[1]]  # ties
 
-dtStrata <- copy(dt)
+dtStrata <- data.table::copy(dt)
 dtStrata[, strata :=  rbinom(n = .N, size = 2, prob = c(1/3,1/2))] # strata
-dtStrata.sort <- copy(dtStrata)
+dtStrata.sort <- data.table::copy(dtStrata)
 setkeyv(dtStrata.sort, c("strata", "time"))
 
 ## ** No strata, no interaction, continous

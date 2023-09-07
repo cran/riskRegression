@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: feb 27 2017 (10:47) 
 ## Version: 
-## last-updated: feb 24 2021 (23:07) 
-##           By: Brice Ozenne
-##     Update #: 109
+## last-updated: Sep  6 2023 (09:53) 
+##           By: Thomas Alexander Gerds
+##     Update #: 110
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -113,7 +113,7 @@ autoplot.predictCSC <- function(object,
     
 
     ## display
-    newdata <- copy(object$newdata)
+    newdata <- data.table::copy(object$newdata)
     if(!is.null(newdata) && reduce.data[[1]]){
         test <- unlist(newdata[,lapply(.SD, function(col){length(unique(col))==1})])
         if(any(test)){

@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: aug 19 2020 (09:18) 
 ## Version: 
-## Last-Updated: okt  6 2020 (16:05) 
-##           By: Brice Ozenne
-##     Update #: 71
+## Last-Updated: Sep  6 2023 (09:53) 
+##           By: Thomas Alexander Gerds
+##     Update #: 72
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -93,7 +93,7 @@
 ##' treatVar <- ateFit$variables["treatment"]
 ##' 
 ##' for(iSim in 1:n.sim){ ## iSim <- 1
-##' iData <- copy(dtS)
+##' iData <- data.table::copy(dtS)
 ##' iIndex <- sample.int(NROW(iData), replace = FALSE)
 ##' iData[, c(treatVar) := .SD[[treatVar]][iIndex]]
 ##'

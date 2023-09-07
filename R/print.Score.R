@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: May 31 2016 (11:32)
 ## Version:
-## last-updated: Feb  6 2023 (15:49) 
+## last-updated: Sep  6 2023 (09:53) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 68
+##     Update #: 69
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -81,7 +81,7 @@ print.scoreAUC <- function(x,B,digits=3,response.type,...){
     AUC=se=lower=upper=delta.AUC=NULL
     cat("\nResults by model:\n\n")
     fmt <- paste0("%1.",digits[[1]],"f")
-    X <- copy(x)
+    X <- data.table::copy(x)
     X$score[,AUC:=sprintf(fmt=fmt,100*AUC)]
     if (match("se",colnames(X$score),nomatch=0)) X$score[,se:=NULL]
     if (match("lower",colnames(X$score),nomatch=0)) X$score[,lower:=sprintf(fmt=fmt,100*lower)]
@@ -104,7 +104,7 @@ print.scoreBrier <- function(x,B,digits=3,response.type,...){
     Brier=IPA=se.conservative=se=lower=upper=delta.Brier=NULL
     cat("\nResults by model:\n\n")
     fmt <- paste0("%1.",digits[[1]],"f")
-    X <- copy(x)
+    X <- data.table::copy(x)
     X$score[,Brier:=sprintf(fmt=fmt,100*Brier)]
     if (match("IPA",colnames(X$score),nomatch=0)) X$score[,IPA:=sprintf(fmt=fmt,100*IPA)]
     if (match("se",colnames(X$score),nomatch=0)) X$score[,se:=NULL]

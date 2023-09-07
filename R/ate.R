@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Oct 23 2016 (08:53) 
 ## Version: 
-## last-updated: Feb 10 2023 (09:19) 
+## last-updated: Jun  8 2023 (14:00) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 2299
+##     Update #: 2313
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -295,14 +295,14 @@ ate <- function(event,
                 censor = NULL,
                 data,
                 data.index = NULL,
-                formula,
+                formula = NULL,
                 estimator = NULL,
                 strata = NULL,
                 contrasts = NULL,
                 allContrasts = NULL,
                 times,
                 cause = NA,
-                landmark,
+                landmark = NULL,
                 se = TRUE,
                 iid = (B == 0) && (se || band),
                 known.nuisance = FALSE,
@@ -544,7 +544,7 @@ ate <- function(event,
     }
     ## note: system.time() seems to slow down the execution of the function, this is why Sys.time is used instead.
     tps1 <- Sys.time()
-
+    
     pointEstimate <- do.call(fct.pointEstimate, args.pointEstimate)
     
     tps2 <- Sys.time()
@@ -688,7 +688,7 @@ ate_initArgs <- function(object.event,
                          object.treatment,
                          object.censor,
                          landmark,
-                         formula,
+                         formula = NULL,
                          estimator,
                          mydata, ## instead of data to avoid confusion between the function data and the dataset when running the bootstrap
                          data.index,
@@ -828,9 +828,19 @@ ate_initArgs <- function(object.event,
             if(any(model.event$y[,NCOL(model.event$y)]==1)){
                 modeldata <- try(eval(model.event$call$data), silent = TRUE)
                 if(inherits(x=modeldata,what="try-error")){
-                    cause <- unique(mydata[[eventVar.status]][model.event$y[,NCOL(model.event$y)]==1])
+                    if(NROW(mydata)==NROW(model.event$y)){
+                        cause <- unique(mydata[[eventVar.status]][model.event$y[,NCOL(model.event$y)]==1])
+                    }else{
+                        stop("Cannot guess which value of the variable \"",eventVar.status,"\" corresponds to the outcome of interest \n",
+                             "Number of rows differs between the input data and the model frame (object$y). \n")
+                    }                    
                 }else{
-                    cause <- unique(modeldata[[eventVar.status]][model.event$y[,NCOL(model.event$y)]==1])
+                    if(NROW(modeldata)==NROW(model.event$y)){
+                        cause <- unique(modeldata[[eventVar.status]][model.event$y[,NCOL(model.event$y)]==1])
+                    }else{
+                        stop("Cannot guess which value of the variable \"",eventVar.status,"\" corresponds to the outcome of interest \n",
+                             "Number of rows differs between the training data (",deparse(model.event$call$data),") and the model frame (object$y), possibly due to missing values. \n")
+                    }
                 }
             }
         }
@@ -886,7 +896,7 @@ ate_initArgs <- function(object.event,
     ## presence of time dependent covariates
     TD <- switch(class(object.event)[[1]],
                  "coxph"=(attr(object.event$y,"type")=="counting"),
-                 "CauseSpecificCox"=(attr(object.event$models[[1]]$y,"type")=="counting"),
+                 "CauseSpecificCox"=(attr(object.event$models[[1]]$y,"type")[1]=="counting"),
                  FALSE)
     if(TD){
         fct.pointEstimate <- ATE_TD
@@ -1107,8 +1117,13 @@ ate_checkArgs <- function(call,
         stop("Argument \'cause\' should not be specified when using a glm model in argument \'event\'")
     }
     if(length(cause)>1 || is.na(cause)){
-        stop("Cannot guess which value of the variable \"",eventVar.status,"\" corresponds to the outcome of interest \n",
-             "Please specify the argument \'cause\'. \n")
+        if(!is.null(object.event$na.action)){
+            stop("Cannot guess which value of the variable \"",eventVar.status,"\" corresponds to the outcome of interest \n",
+                 "Likely due to missing data in the dataset used to fit the survival model. \n")
+        }else{
+            stop("Cannot guess which value of the variable \"",eventVar.status,"\" corresponds to the outcome of interest \n",
+                 "Please specify the argument \'cause\'. \n")
+        }
     }
     if(cause %in% mydata[[eventVar.status]] == FALSE){
         stop("Value of the argument \'cause\' not found in column \"",eventVar.status,"\" \n")
@@ -1362,7 +1377,7 @@ ate_checkArgs <- function(call,
         }
         freq.event <- tapply(data.status, data.strata, function(x){mean(x==cause)})
         count.event <- tapply(data.status, data.strata, function(x){sum(x==cause)})
-
+        
         if(any(count.event < 5)  ){
             warning("Rare event \n")
         }

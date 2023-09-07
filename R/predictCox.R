@@ -156,7 +156,7 @@ predictCox <- function(object,
                        store.iid = "full"){
 
     call <- match.call()
-    newdata <- copy(newdata)
+    newdata <- data.table::copy(newdata)
     ## centering
     if(!is.null(newdata)){
         if(inherits(centered,"data.frame")){
@@ -263,10 +263,10 @@ predictCox <- function(object,
     if(!is.null(object$naive.var)){
         stop("predictCox does not know how to handle frailty.") 
     }
-    if(any(object.modelFrame[["start"]]!=0)){
-        warning("The current version of predictCox was not designed to handle left censoring \n",
-                "The function may be used on own risks \n") 
-    }    
+    ## if(any(object.modelFrame[["start"]]!=0)){
+    ##     warning("The current version of predictCox was not designed to handle left censoring \n",
+    ##             "The function may be used on own risks \n") 
+    ## }    
     if(object.baseEstimator == "exact"){
         stop("Prediction with exact handling of ties is not implemented.\n")
     }
@@ -401,10 +401,10 @@ predictCox <- function(object,
         return(Lambda0)
     } else {
     
-      out <- list()
-      ## *** reformat newdata (compute linear predictor and strata)
-      new.n <- NROW(newdata)
-      setDT(newdata)
+        out <- list()
+        ## *** reformat newdata (compute linear predictor and strata)
+        new.n <- NROW(newdata)
+        newdata <- data.table::as.data.table(newdata)
 
         Xb <- coxLP(object, data = newdata, center = FALSE)
         if ("lp" %in% type){

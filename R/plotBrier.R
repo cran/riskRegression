@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Feb 23 2017 (11:07)
 ## Version:
-## last-updated: May 31 2022 (11:43) 
+## last-updated: Sep  6 2023 (09:53) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 75
+##     Update #: 77
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -73,12 +73,17 @@ plotBrier <- function(x,
     cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     which <- tolower(which[1])
     pframe <- switch(which,
-                     "score"={copy(x$Brier$score)},
-                     "ipa"={copy(x$Brier$score)},
-                     "contrasts"={copy(x$Brier$contrasts)},
+                     "score"={data.table::copy(x$Brier$score)},
+                     "ipa"={data.table::copy(x$Brier$score)},
+                     "contrasts"={data.table::copy(x$Brier$contrasts)},
                      {stop("argument 'which' has to be either 'score' for Brier, 'ipa' for IPA, or 'contrasts' for differences in Brier.")})
     if (length(pframe$times)<2) stop(paste("Need at least two time points for plotting time-dependent Brier. Object has only ",length(pframe$times),"times"))
-    if (!missing(models)) pframe <- pframe[model %in% models]
+    if (!missing(models)) {
+        if (any(!(models %in% unique(pframe$models))))
+            stop(paste0("Fitted object does not contain models named: ",paste0(models,collapse = ", "),
+                        "\nAvailable models are named: ",paste0(unique(pframe$models),collapse = ", ")))
+        pframe <- pframe[model %in% models]
+    }
     if (which=="score"){
         mm <- unique(pframe$model)
         if ("se"%in%names(pframe)){

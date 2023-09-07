@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Feb 27 2022 (09:12)
 ## Version:
-## Last-Updated: Jun 24 2022 (16:34) 
+## Last-Updated: Sep  6 2023 (09:53) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 15
+##     Update #: 20
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -32,6 +32,7 @@ computePerformance <- function(DT,
                                multi.split.test,
                                keep.residuals,
                                keep.vcov,
+                               keep.iid,
                                dolist,
                                probs,
                                metrics,
@@ -41,7 +42,9 @@ computePerformance <- function(DT,
                                ipa,
                                ROC=FALSE,
                                MC,
-                               IC.data){
+                               IC.data,
+                               breaks=NULL,
+                               cutpoints=NULL){
     IPA=IBS=Brier=NULL
     model = reference = NULL
     ## ibs <- "ibs"%in%summary
@@ -61,15 +64,16 @@ computePerformance <- function(DT,
                   multi.split.test=multi.split.test,
                   keep.residuals=keep.residuals,
                   keep.vcov=keep.vcov,
+                  keep.iid=keep.iid,                  
                   ## DT.residuals=DT.residuals,
-                  dolist=dolist,Q=probs,ROC=FALSE,MC=MC,IC.data=IC.data)
+                  dolist=dolist,Q=probs,ROC=FALSE,MC=MC,IC.data=IC.data,breaks=breaks,cutpoints=cutpoints) ## will break survival
     if (response.type=="competing.risks") {
         input <- c(input,list(cause=cause,states=states))
     }
     # {{{ collect data for summary statistics
     for (s in summary){
         if (s=="risks") {
-            out[[s]] <- list(score=copy(input$DT)[,model:=factor(model,levels=models$levels,models$labels)],
+            out[[s]] <- list(score=data.table::copy(input$DT)[,model:=factor(model,levels=models$levels,models$labels)],
                              contrasts=NULL)
         } else{
             out[[s]] <- do.call(paste(s,response.type,sep="."),input)

@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: jun 27 2019 (10:43) 
 ## Version: 
-## Last-Updated: Mar  7 2022 (08:35) 
+## Last-Updated: Sep  6 2023 (09:53) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 932
+##     Update #: 935
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -199,7 +199,6 @@ ATE_TI <- function(object.event,
             }else{
                 factor <- FALSE
             }
-
             outRisk <- predictRisk(object.event, newdata = data.i, times = times,
                                    average.iid = factor, cause = cause,
                                    product.limit = product.limit)
@@ -422,9 +421,9 @@ ATE_TD <- function(object.event,
 ## * ATE_COMPARISONS: compute average risk for time dependent covariates (using G-formula)
 ATE_COMPARISONS <- function(data, TD, allContrasts){
     ## duplicate
-    dataA <- copy(data)
+    dataA <- data.table::copy(data)
     setnames(dataA, old = c("treatment","estimate"), new = c("A","estimate.A"))
-    dataB <- copy(data)
+    dataB <- data.table::copy(data)
     setnames(dataB, old = c("treatment","estimate"), new = c("B","estimate.B"))
 
     ## perform all pairwise combinations

@@ -109,7 +109,7 @@ summary(fit.ate)
 dt.ate <- as.data.table(fit.ate)
 
 ## manual calculation of se
-dd <- copy(d)
+dd <- data.table::copy(d)
 dd$X1 <- rep(factor("T0", levels = paste0("T",0:2)), NROW(dd))
 out <- predictCox(fit, newdata = dd, se = TRUE, times = 1:3, average.iid = TRUE)
 term1 <- -out$survival.average.iid

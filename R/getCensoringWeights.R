@@ -6,7 +6,7 @@ getCensoringWeights <- function(formula,
                                 response.type,
                                 influence.curve=FALSE,
                                 censoring.save.memory){
-    data <- copy(data)
+    data <- data.table::copy(data)
     if((cens.model != "KaplanMeier")){
         if (length(attr(terms(formula),"factors"))==0){
             cens.model <- "marginal"
@@ -38,7 +38,7 @@ getCensoringWeights <- function(formula,
                event = event2 = NULL
                sFormula <- update(formula,"Surv(time,status == 0)~.")
                tFormula <- update(formula,"Surv(time,status != 0)~.")
-               wdata <- copy(data)
+               wdata <- data.table::copy(data)
                if (length(unique(wdata[["event"]])) > 2){
                    wdata[,event2 := as.numeric(event)]
                    wdata[status == 0,event2 := 0]
@@ -117,7 +117,7 @@ getCensoringWeights <- function(formula,
                warning("Using other models (than Cox) for getting the censoring weights is under construction.  ")
                vv <- all.vars(formula(delete.response(terms(formula))))
                new.formula<-as.formula(paste0("Surv(time,status)",paste0("~",paste0(paste(vv,collapse = "+")))))
-               wdata <- copy(data)
+               wdata <- data.table::copy(data)
                wdata[,status:=1-status]
                input <- list(formula=new.formula,data=wdata)
                message("Fitting censoring model to data ...", appendLF = FALSE)
