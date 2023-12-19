@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: sep  4 2017 (10:38) 
 ## Version: 
-## last-updated: Sep  6 2023 (09:52) 
-##           By: Thomas Alexander Gerds
-##     Update #: 178
+## last-updated: mar  7 2023 (18:31) 
+##           By: Brice Ozenne
+##     Update #: 177
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -194,7 +194,7 @@ dt[,X2:=as.numeric(as.character(X2))]
 dt[ , X16 := X1*X6]
 
 ## sorted dataset
-dt.sort <- data.table::copy(dt)
+dt.sort <- copy(dt)
 setkeyv(dt.sort,c("time")) 
 
 ## ** Model
@@ -377,7 +377,7 @@ test_that("[predictCox] after the last event",{
 
 test_that("Prediction - last event censored",{
 
-    dt.lastC <- data.table::copy(dt)
+    dt.lastC <- copy(dt)
     Utimes <- sort(unique(dt$time))
     n.Utimes <- length(Utimes)
     dt.lastC[time==max(time), event := 0]
@@ -393,7 +393,7 @@ test_that("Prediction - last event censored",{
 
 test_that("Prediction - last event death",{
 
-    dt.lastD <- data.table::copy(dt)
+    dt.lastD <- copy(dt)
     Utimes <- sort(unique(dt$time))
     n.Utimes <- length(Utimes)
     dt.lastD[time==max(time), event := 1]
@@ -510,7 +510,7 @@ dt[,X2:=as.numeric(as.character(X2))]
 dt[ , Xcat2 := as.factor(paste0(X1,X2))]
 
 ## sorted dataset
-dt.sort <- data.table::copy(dt)
+dt.sort <- copy(dt)
 setkeyv(dt.sort,c("time")) 
 
 ## ** Model
@@ -549,9 +549,9 @@ test_that("[predictCox] compare survival and survival.se to timereg/cph (categor
 cat("[predictCox] Predictions (strata) \n")
 ## ** Data
 set.seed(10)
-dtStrata <- data.table::copy(dt)
+dtStrata <- copy(dt)
 dtStrata[, strata :=  rbinom(n = .N, size = 2, prob = c(1/3,1/2))] # strata
-dtStrata.sort <- data.table::copy(dtStrata)
+dtStrata.sort <- copy(dtStrata)
 setkeyv(dtStrata.sort, c("strata", "time"))
 
 ## ** Model
@@ -567,7 +567,7 @@ eS.coxph <- coxph(Surv(time, event) ~ strata(strata) + X1 + X6,
 
 ## ** Reject incorrect strata
 test_that("[predictCox] - incorrect strata",{
-    dt2 <- data.table::copy(dt)
+    dt2 <- copy(dt)
     dt2$strata <- "5616"
     expect_error(suppressWarnings(predictCox(eS.coxph, times = dt2$time, newdata = dt2)))
 })

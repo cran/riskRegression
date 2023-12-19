@@ -241,41 +241,57 @@ fit <- lrm(Y~X1+X8,data=d)
 predictRisk(fit,newdata=nd)
 
 ## survival outcome
+# generate survival data
+library(prodlim)
+set.seed(100)
+d <- sampleData(100,outcome="survival")
+d[,X1:=as.numeric(as.character(X1))]
+d[,X2:=as.numeric(as.character(X2))]
+# then fit a Cox model
+library(rms)
+cphmodel <- cph(Surv(time,event)~X1+X2,data=d,surv=TRUE,x=TRUE,y=TRUE)
+# or via survival
+library(survival)
+coxphmodel <- coxph(Surv(time,event)~X1+X2,data=d,x=TRUE,y=TRUE)
+
+# Extract predicted survival probabilities
+# at selected time-points:
+ttt <- quantile(d$time)
+# for selected predictor values:
+ndat <- data.frame(X1=c(0.25,0.25,-0.05,0.05),X2=c(0,1,0,1))
+# as follows
+predictRisk(cphmodel,newdata=ndat,times=ttt)
+predictRisk(coxphmodel,newdata=ndat,times=ttt)
+
 ## simulate learning and validation data
 set.seed(10)
 learndat <- sampleData(80,outcome="survival")
 valdat <- sampleData(10,outcome="survival")
 ## use the learning data to fit a Cox model
 library(survival)
-fitCox <- coxph(Surv(time,event)~X8+X9,data=learndat,x=TRUE,y=TRUE)
+fitCox <- coxph(Surv(time,event)~X6+X2,data=learndat,x=TRUE,y=TRUE)
 ## suppose we want to predict the survival probabilities for all subjects
-## in the validation data at the time points 0,5,10:
-psurv <- predictRisk(fitCox,newdata=valdat,times=c(0,5,10))
-## This is a matrix with event probabilities,
+## in the validation data at the following time points:
+## 0, 1, 2, 3, 4
+psurv <- predictRisk(fitCox,newdata=valdat,times=seq(0,4,1))
+## This is a matrix with event probabilities (1-survival)
 ## one column for each of the 5 time points
 ## one row for each validation set individual
-## where event probability = 1 - survival probability
-\dontrun{
-if (require("randomForestSRC",quietly=TRUE)){
-# Do the same with a randomSurvivalForest model
-library(randomForestSRC)
-rsfmodel <- rfsrc(Surv(time,event)~X1+X2,data=learndat,ntree=5)
-prsfsurv=predictRisk(rsfmodel,newdata=valdat,times=seq(0,5,10))
-}
-}
 
 ## competing risks
 library(survival)
 library(riskRegression)
 library(prodlim)
-train <- sampleData(50)
+set.seed(8)
+train <- sampleData(80)
 test <- sampleData(10)
-cox.fit  <- CSC(Hist(time,event)~X7+X8,data=train)
-predictRisk(cox.fit,newdata=test,times=c(3,8),cause=1)
+cox.fit  <- CSC(Hist(time,event)~X1+X6,data=train,cause=1)
+predictRisk(cox.fit,newdata=test,times=seq(1:10),cause=1)
 
-## with strata and cause 2
-cox.fit2  <- CSC(list(Hist(time,event)~strata(X1)+X2,Hist(time,cause)~X1+X2),data=train)
-predictRisk(cox.fit2,newdata=test,times=c(3,5),cause=2)
+## with strata
+cox.fit2  <- CSC(list(Hist(time,event)~strata(X1)+X6,
+                      Hist(time,cause)~X1+X6),data=train)
+predictRisk(cox.fit2,newdata=test,times=seq(1:10),cause=1)
 
 }
 \author{

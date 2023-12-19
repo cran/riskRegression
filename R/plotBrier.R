@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Feb 23 2017 (11:07)
 ## Version:
-## last-updated: Sep  6 2023 (09:53) 
+## last-updated: May 30 2023 (08:07) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 77
+##     Update #: 76
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -73,9 +73,9 @@ plotBrier <- function(x,
     cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     which <- tolower(which[1])
     pframe <- switch(which,
-                     "score"={data.table::copy(x$Brier$score)},
-                     "ipa"={data.table::copy(x$Brier$score)},
-                     "contrasts"={data.table::copy(x$Brier$contrasts)},
+                     "score"={copy(x$Brier$score)},
+                     "ipa"={copy(x$Brier$score)},
+                     "contrasts"={copy(x$Brier$contrasts)},
                      {stop("argument 'which' has to be either 'score' for Brier, 'ipa' for IPA, or 'contrasts' for differences in Brier.")})
     if (length(pframe$times)<2) stop(paste("Need at least two time points for plotting time-dependent Brier. Object has only ",length(pframe$times),"times"))
     if (!missing(models)) {

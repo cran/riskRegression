@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun 23 2016 (09:19) 
 ## Version: 
-## last-updated: Sep  6 2023 (09:54) 
+## last-updated: May 30 2023 (08:07) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 87
+##     Update #: 86
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -75,7 +75,7 @@ plotAUC <- function(x,
     times=contrast=model=AUC=lower=upper=lower=upper=delta.AUC=reference=se=NULL
     ## cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
     cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-    pframe <- switch(which,"score"={data.table::copy(x$AUC$score)},"contrasts"={data.table::copy(x$AUC$contrasts)},{stop("argument 'which' has to be either 'score' for AUC or 'contrasts' for differences in AUC.")})
+    pframe <- switch(which,"score"={copy(x$AUC$score)},"contrasts"={copy(x$AUC$contrasts)},{stop("argument 'which' has to be either 'score' for AUC or 'contrasts' for differences in AUC.")})
     if (length(pframe$times)<2) stop(paste("Need at least two time points for plotting time-dependent AUC. Object has only ",length(pframe$times),"times"))
     if (!missing(models)) {
         if (any(!(models %in% unique(pframe$models))))

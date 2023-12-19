@@ -104,7 +104,7 @@ pb <- txtProgressBar(max = n.sim, style=3)
 treatVar <- ateFit$variables["treatment"]
 
 for(iSim in 1:n.sim){ ## iSim <- 1
-iData <- data.table::copy(dtS)
+iData <- copy(dtS)
 iIndex <- sample.int(NROW(iData), replace = FALSE)
 iData[, c(treatVar) := .SD[[treatVar]][iIndex]]
 

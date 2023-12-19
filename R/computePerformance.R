@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Feb 27 2022 (09:12)
 ## Version:
-## Last-Updated: Sep  6 2023 (09:53) 
+## Last-Updated: Jun 30 2023 (13:50) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 20
+##     Update #: 19
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -73,7 +73,7 @@ computePerformance <- function(DT,
     # {{{ collect data for summary statistics
     for (s in summary){
         if (s=="risks") {
-            out[[s]] <- list(score=data.table::copy(input$DT)[,model:=factor(model,levels=models$levels,models$labels)],
+            out[[s]] <- list(score=copy(input$DT)[,model:=factor(model,levels=models$levels,models$labels)],
                              contrasts=NULL)
         } else{
             out[[s]] <- do.call(paste(s,response.type,sep="."),input)

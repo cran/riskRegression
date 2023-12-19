@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Feb 27 2022 (09:12) 
 ## Version: 
-## Last-Updated: Sep  6 2023 (09:54) 
+## Last-Updated: Apr 27 2023 (15:10) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 39
+##     Update #: 38
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -58,7 +58,7 @@ getPerformanceData <- function(testdata,
         trainX <- traindata[,-c(1:response.dim),with=FALSE]
         ## restore sanity
         setnames(trainX,sub("^protectedName.","",names(trainX)))
-        ## trainX <- data.table::copy(traindata)
+        ## trainX <- copy(traindata)
         trainX[,ID:=NULL]
     }
     pred <- data.table::rbindlist(lapply(levs, function(f){
