@@ -80,8 +80,6 @@ NULL
 #'
 #' Methods for evaluating risk predictions in censored event history analysis
 #' @keywords internal
-# "_PACKAGE"
-#' @docType package
 #' @name riskRegression-package
 #' @aliases riskRegression-package
 #' @useDynLib riskRegression, .registration=TRUE
@@ -92,15 +90,16 @@ NULL
 #' @importFrom ggplot2 autoplot aes aes_string element_blank element_line element_rect geom_errorbar geom_line geom_point geom_ribbon ggplot labs guide_legend guides scale_colour_manual scale_color_continuous scale_fill_manual scale_linetype_manual scale_y_continuous theme theme_bw "%+replace%"  unit xlab  ylab
 #' @importFrom survival Surv strata coxph survreg
 #' @importFrom lava sim iid information score transform<- exogenous endogenous regression<-
-#' @importFrom data.table data.table set dcast setkeyv as.data.table copy data.table is.data.table melt rbindlist setnames setorder setcolorder setkey ":=" ".N" ".SD"
+#' @importFrom data.table data.table set dcast setkeyv as.data.table copy data.table is.data.table melt rbindlist setnames setorder setorderv setcolorder setkey ":=" ".N" ".SD"
 #' @importFrom prodlim Hist dimColor prodlim
 #' @importFrom foreach "%dopar%" foreach "%do%"
 #' @importFrom cmprsk predict.crr
+#' @importFrom glmnet glmnet cv.glmnet
 #' @importFrom timereg comp.risk Event
 #' @importFrom prodlim Hist jackknife prodlim sindex
 #' @importFrom grDevices col2rgb gray
 #' @importFrom graphics bxp abline axis box legend lines mtext par plot points segments text title polygon par boxplot
 #' @importFrom utils capture.output find head select.list setTxtProgressBar tail txtProgressBar
-#' @importFrom stats confint cov as.formula coef delete.response drop.terms family formula get_all_vars lm glm median model.frame model.matrix model.response na.fail na.omit nobs optim pnorm predict qnorm quantile rbinom reformulate rexp runif sd setNames smooth terms terms.formula time uniroot update update.formula var wilcox.test
-NULL
+#' @importFrom stats confint cov as.formula coef delete.response drop.terms family formula get_all_vars lm glm median model.frame model.matrix model.response model.tables na.fail na.omit nobs optim pnorm predict qnorm quantile rbinom reformulate rexp runif sd setNames smooth terms terms.formula time uniroot update update.formula var vcov weights wilcox.test
+"_PACKAGE"
 

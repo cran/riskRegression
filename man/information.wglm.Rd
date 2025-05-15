@@ -4,17 +4,17 @@
 \alias{information.wglm}
 \title{Information for IPCW Logistic Regressions}
 \usage{
-\method{information}{wglm}(x, times = NULL, simplifies = TRUE, ...)
+\method{information}{wglm}(x, times = NULL, simplify = TRUE, ...)
 }
 \arguments{
 \item{x}{a wglm object.}
 
 \item{times}{[numeric vector] time points at which the score should be output.}
 
-\item{simplifies}{[logical] should the ouput be converted to a matrix when only one timepoint is requested. Otherwise will always return a list.}
+\item{simplify}{[logical] should the ouput be converted to a matrix when only one timepoint is requested. Otherwise will always return a list.}
 
 \item{...}{Not used.}
 }
 \description{
-Compute the information (i.e. opposit of the expectation of the second derivative of the log-likelihood) for IPCW logistic regressions.
+Compute the information (i.e. opposite of the expectation of the second derivative of the log-likelihood) for IPCW logistic regressions.
 }

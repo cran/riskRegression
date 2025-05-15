@@ -10,14 +10,12 @@ ate(
   censor = NULL,
   data,
   data.index = NULL,
-  formula = NULL,
   estimator = NULL,
   strata = NULL,
   contrasts = NULL,
   allContrasts = NULL,
   times,
   cause = NA,
-  landmark = NULL,
   se = TRUE,
   iid = (B == 0) && (se || band),
   known.nuisance = FALSE,
@@ -33,23 +31,19 @@ ate(
 }
 \arguments{
 \item{event}{Outcome model which describes how the probability of experiencing a terminal event depends
-on treatment and covariates. The object carry its own call and
-have a \code{predictRisk} method. See examples.}
+on treatment and covariates. The object carry its own call and have a \code{predictRisk} method. See details section and examples section.}
 
-\item{treatment}{Treatment model which describes how the probability of being allocated to a treatment group depends
-on covariates. The object must be a \code{glm} object (logistic regression) or the name of the treatment variable.
-See examples.}
+\item{treatment}{Name of the treatment variable or treatment model which describes how the probability of being allocated to a treatment group depends
+on covariates. See details section and examples section.}
 
 \item{censor}{Censoring model which describes how the probability of being censored depends
-on treatment and covariates. The object must be a \code{coxph} or \code{cph} object. See examples.}
+on treatment and covariates. See details section and examples section.}
 
 \item{data}{[data.frame or data.table] Data set in which to evaluate risk predictions
 based on the outcome model}
 
 \item{data.index}{[numeric vector] Position of the observation in argument data relative to the dataset used to obtain the argument event, treatment, censor.
 Only necessary for the standard errors when computing the Average Treatment Effects on a subset of the data set.}
-
-\item{formula}{For analyses with time-dependent covariates, the response formula. See examples.}
 
 \item{estimator}{[character] The type of estimator used to compute the average treatment effect. 
 Can be \code{"G-formula"}, \code{"IPTW"}, or \code{"AIPTW"}.
@@ -67,10 +61,6 @@ Incompatible with treatment. Experimental.}
 \item{times}{[numeric vector] Time points at which to evaluate average treatment effects.}
 
 \item{cause}{[integer/character] the cause of interest.}
-
-\item{landmark}{for models with time-dependent covariates the landmark time(s) of evaluation.
-In this case, argument \code{time} may only be one value and for the prediction of risks
-it is assumed that that the covariates do not change between landmark and landmark+time.}
 
 \item{se}{[logical] If \code{TRUE} compute and add the standard errors to the output.}
 
@@ -112,96 +102,164 @@ to estimate the average treatment
     effect (absolute risk difference or ratio)
 based on Cox regression with or without competing risks.
 }
+\details{
+Argument \bold{event}: \itemize{
+\item IPTW estimator: a character vector indicating the event and status variables.
+\item G-formula or AIPTW estimator: a survival model (e.g. Cox \code{"survival::coxph"}, Kaplan Meier \code{"prodlim::prodlim"}),
+a competing risk model (e.g. cause-specific Cox \code{"riskRegression::CSC"}),
+a logistic model (e.g. \code{"stats::glm"} when argument \code{censor} is \code{NULL} otherwise \code{"riskRegression::wglm"}).
+Other models can be specified, provided a suitable \code{predictRisk} method exists, but the standard error should be computed using non-parametric bootstrap,
+as the influence function of the estimator will typically not be available.
+}
+Argument \bold{treatment}: \itemize{
+\item G-formula estimator: a character indicating the treatment variable.
+\item IPTW or AIPTW estimator: a \code{"stats::glm"} model with family \code{"binomial"} (two treatment options) or a \code{"nnet::multinom"} (more than two treatment options).
+}
+Argument \bold{censor}: \itemize{
+\item G-formula estimator: NULL
+\item IPTW or AIPTW estimator: NULL if no censoring and otherwise a survival model (e.g. Cox \code{"survival::coxph"}, Kaplan Meier \code{"prodlim::prodlim"}) 
+}
+
+Argument \bold{estimator}: when set to \code{"AIPTW"} with argument \code{event} being IPCW logistic model (\code{"riskRegression::wglm"}), the integral term w.r.t. to the martingale of the censoring process is not computed,
+i.e. using the notation of Ozenne et al. (2020) an AIPTW,IPCW estimator instead of an AIPTW,AIPCW is evaluated. \cr
+
+In presence of censoring, the computation time and memory usage for the evaluation of the AIPTW estimator and its uncertainty do not scale well with the number of observations (n) or the number of unique timepoints (T).
+Point estimation involves n by T matrices, influence function involves n by T by n arrays. \itemize{
+\item for large datasets (e.g. n>5000), bootstrap is recommended as the memory need for the influence function is likely prohibitive.
+\item it is possible to decrease the memory usage for the point estimation by setting the (hidden) argument \code{store=c(size.split=1000)}. The integral term of the AIPTW estimator is then evaluated for 1000 observations at a time, i.e. involing matrices of size 1000 by T instead of n by T. This may lead to increased computation time.
+\item reducing the number of unique timepoints (e.g. by rounding them) will lead to an approximate estimation procedure that is less demanding both in term of computation and memory. The resulting estimator will be more variable than the one based on the original timepoints (i.e. wider confidence intervals).
+}
+}
 \examples{
 library(survival)
-library(rms)
 library(prodlim)
 library(data.table)
-set.seed(10)
 
+############################
 #### Survival settings  ####
 #### ATE with Cox model ####
+############################
 
-## generate data
+#### generate data ####
 n <- 100
+set.seed(10)
 dtS <- sampleData(n, outcome="survival")
 dtS$time <- round(dtS$time,1)
 dtS$X1 <- factor(rbinom(n, prob = c(0.3,0.4) , size = 2), labels = paste0("T",0:2))
 
-## estimate the Cox model
-fit <- cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
+##### estimate the survival model ####
+## Cox proportional hazard model
+fit.Cox <- coxph(Surv(time,event)~ X1+X2, data=dtS, y=TRUE, x=TRUE)
+## Kaplan Meier - same as copxh(Surv(time,event)~ strata(X1)+strata(X2), ties = "breslow")
+fit.KM <- prodlim(Hist(time,event)~ X1+X2, data=dtS)
 
-## compute the ATE at times 5, 6, 7, and 8 using X1 as the treatment variable
+##### compute the ATE ####
+## at times 5, 6, 7, and 8 using X1 as the treatment variable
 ## standard error computed using the influence function
 ## confidence intervals / p-values based on asymptotic results
-ateFit1a <- ate(fit, data = dtS, treatment = "X1", times = 5:8)
+ateFit1a <- ate(fit.Cox, treatment = "X1", times = 5:8, data = dtS)
 summary(ateFit1a)
-summary(ateFit1a, short = TRUE, type = "meanRisk")
-summary(ateFit1a, short = TRUE, type = "diffRisk")
-summary(ateFit1a, short = TRUE, type = "ratioRisk")
+model.tables(ateFit1a, type = "meanRisk")
+model.tables(ateFit1a, type = "diffRisk")
+model.tables(ateFit1a, type = "ratioRisk")
+
+## relaxing PH assumption using a stratified model
+ateFit1a.NPH <- ate(fit.KM, treatment = "X1", times = 5:8, data = dtS,
+                    product.limit = FALSE)
+model.tables(ateFit1a.NPH, times = 5) ## no PH assumption
+model.tables(ateFit1a, times = 5)  ## PH assumption
 
 \dontrun{
+#### ATE with confidence bands ####
 ## same as before with in addition the confidence bands / adjusted p-values
 ## (argument band = TRUE)
-ateFit1b <- ate(fit, data = dtS, treatment = "X1", times = 5:8,
-                band = TRUE)
+ateFit1b <- ate(fit.Cox, treatment = "X1", times = 5:8, data = dtS, band = TRUE)
 summary(ateFit1b)
 
 ## by default bands/adjuste p-values computed separately for each treatment modality
 summary(ateFit1b, band = 1,
-         se = FALSE, type = "diffRisk", short = TRUE, quantile = TRUE)
+        se = FALSE, type = "diffRisk", short = TRUE, quantile = TRUE)
 ## adjustment over treatment and time using the band argument of confint
 summary(ateFit1b, band = 2,
        se = FALSE, type = "diffRisk", short = TRUE, quantile = TRUE)
+}
 
+\dontrun{
+#### ATE with non-parametric bootstrap ####
 ## confidence intervals / p-values computed using 1000 bootstrap samples
 ## (argument se = TRUE and B = 1000) 
-ateFit1c <- ate(fit, data = dtS, treatment = "X1",
-                times = 5:8, se = TRUE, B = 50, handler = "mclapply")
+ateFit1c <- ate(fit.Cox, treatment = "X1", times = 5:8, data = dtS,
+                se = TRUE, B = 50, handler = "mclapply")
 ## NOTE: for real applications 50 bootstrap samples is not enough 
 
 ## same but using 2 cpus for generating and analyzing the bootstrap samples
 ## (parallel computation, argument mc.cores = 2) 
-ateFit1d <- ate(fit, data = dtS, treatment = "X1",
-                times = 5:8, se = TRUE, B = 50, mc.cores = 2)
+ateFit1d <- ate(fit.Cox, treatment = "X1", times = 5:8, data = dtS, 
+                se = TRUE, B = 50, mc.cores = 2)
 
 ## manually defining the cluster to be used
 ## useful when specific packages need to be loaded in each cluster
-fit <- cph(formula = Surv(time,event)~ X1+X2+rcs(X6),data=dtS,y=TRUE,x=TRUE)
+fit.CoxNL <- coxph(Surv(time,event)~ X1+X2+rcs(X6),data=dtS,y=TRUE,x=TRUE)
 
 cl <- parallel::makeCluster(2)
 parallel::clusterEvalQ(cl, library(rms))
 
-ateFit1e <- ate(fit, data = dtS, treatment = "X1",
-                times = 5:8, se = TRUE, B = 50,
-                handler = "foreach", cl = cl)
+ateFit1e <- ate(fit.CoxNL, treatment = "X1", times = 5:8, data = dtS, 
+                se = TRUE, B = 50, handler = "foreach", cl = cl)
+parallel::stopCluster(cl)
 }
 
+
+################################################
+#### Competing risks settings               ####
+#### ATE with cause specific Cox regression ####
+################################################
+
+#### generate data ####
+n <- 500
+set.seed(10)
+dt <- sampleData(n, outcome="competing.risks")
+dt$X1 <- factor(rbinom(n, prob = c(0.2,0.3) , size = 2), labels = paste0("T",0:2))
+
+#### estimate cause specific Cox model ####
+fit.CR <-  CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
+
+#### compute the ATE ####
+## at times 1, 5, 10
+## using X1 as the treatment variable
+ateFit2a <- ate(fit.CR, treatment = "X1", times = c(1,5,10), data = dt, 
+                cause = 1, se = TRUE, band = TRUE)
+summary(ateFit2a)
+data.table::as.data.table(ateFit2a)
+
+#############################################
 #### Survival settings without censoring ####
 #### ATE with glm                        ####
+#############################################
 
-## generate data
+#### generate data ####
 n <- 100
 dtB <- sampleData(n, outcome="binary")
 dtB[, X2 := as.numeric(X2)]
 
-## estimate a logistic regression model
-fit <- glm(formula = Y ~ X1+X2, data=dtB, family = "binomial")
+##### estimate a logistic regression model ####
+fit.glm <- glm(formula = Y ~ X1+X2, data=dtB, family = "binomial")
 
-## compute the ATE using X1 as the treatment variable
+#### compute the ATE ####
+## using X1 as the treatment variable
 ## only point estimate (argument se = FALSE)
-ateFit1a <- ate(fit, data = dtB, treatment = "X1", se = FALSE)
+ateFit1a <- ate(fit.glm, treatment = "X1", data = dtB, se = FALSE)
 ateFit1a
 
 \dontrun{
 ## with confidence intervals
-ateFit1b <- ate(fit, data = dtB, treatment = "X1",
+ateFit1b <- ate(fit.glm, data = dtB, treatment = "X1",
                times = 5) ## just for having a nice output not used in computations
 summary(ateFit1b, short = TRUE)
 
 ## using the lava package
 library(lava)
-ateLava <- estimate(fit, function(p, data){
+ateLava <- estimate(fit.glm, function(p, data){
 a <- p["(Intercept)"] ; b <- p["X11"] ; c <- p["X2"] ;
 R.X11 <- expit(a + b + c * data[["X2"]])
 R.X10 <- expit(a + c * data[["X2"]])
@@ -210,33 +268,22 @@ average=TRUE)
 ateLava
 }
 
+############################
+#### Survival settings  ####
+#### ATE with glm       ####
+############################
+
 ## see wglm for handling right-censoring with glm
 
-#### Competing risks settings               ####
-#### ATE with cause specific Cox regression ####
-
-## generate data
-n <- 500
-set.seed(10)
-dt <- sampleData(n, outcome="competing.risks")
-dt$X1 <- factor(rbinom(n, prob = c(0.2,0.3) , size = 2), labels = paste0("T",0:2))
-
-## estimate cause specific Cox model
-fitCR <-  CSC(Hist(time,event)~ X1+X8,data=dt,cause=1)
-
-## compute the ATE at times 1, 5, 10 using X1 as the treatment variable
-ateFit2a <- ate(fitCR, data = dt, treatment = "X1", times = c(1,5,10),
-                cause = 1, se = TRUE, band = TRUE)
-summary(ateFit2a)
-as.data.table(ateFit2a)
-
+#################################
 #### Double robust estimator ####
+#################################
+
 \dontrun{
 ## generate data
 n <- 500
 set.seed(10)
 dt <- sampleData(n, outcome="competing.risks")
-dt$time <- round(dt$time,1)
 dt$X1 <- factor(rbinom(n, prob = c(0.4) , size = 1), labels = paste0("T",0:1))
 
 ## working models
@@ -249,61 +296,45 @@ ateRobust <- ate(event = m.event,
                  treatment = m.treatment,
                  censor = m.censor,
                  data = dt, times = 5:10, 
-                 cause = 1, band = TRUE)
+                 cause = 1)
+summary(ateRobust)
 
 ## compare various estimators
-ateRobust3 <- ate(event = m.event,
+system.time( ## about 1.5s
+ateRobust2 <- ate(event = m.event,
                  treatment = m.treatment,
                  censor = m.censor,
                  estimator = c("GFORMULA","IPTW","AIPTW"),
                  data = dt, times = c(5:10), 
                  cause = 1, se = TRUE)
-print(setkeyv(as.data.table(ateRobust3, type = "meanRisk"),"time"))
-print(setkeyv(as.data.table(ateRobust3, type = "diffRisk"),"time"))
+)
+data.table::as.data.table(ateRobust2, type = "meanRisk")
+data.table::as.data.table(ateRobust2, type = "diffRisk")
+
+## reduce memory load by computing the integral term
+## on only 100 observations at a time (only relevant when iid = FALSE)
+ateRobust3 <- ate(event = m.event,
+                 treatment = m.treatment,
+                 censor = m.censor,
+                 data = dt, times = 5:10, 
+                 cause = 1, se = FALSE,
+                 store = c("size.split" = 100), verbose = 2)
+coef(ateRobust3) - coef(ateRobust) ## same
+
+## approximation to speed up calculations
+dt$time.round <- round(dt$time/0.5)*0.5 ## round to the nearest half
+dt$time.round[dt$time.round==0] <- 0.1 ## ensure strictly positive event times
+mRound.event <-  CSC(Hist(time.round,event)~ X1+X2+X3+X5+X8,data=dt)
+mRound.censor <-  coxph(Surv(time.round,event==0)~ X1+X2+X3+X5+X8,data=dt, x = TRUE, y = TRUE)
+system.time( ## about 0.4s
+ateRobustFast <- ate(event = mRound.event, treatment = m.treatment,
+                    censor = mRound.censor,
+                 estimator = c("GFORMULA","IPTW","AIPTW"), product.limit = FALSE,
+                 data = dt, times = c(5:10), cause = 1, se = TRUE)
+)
+coef(ateRobustFast) - coef(ateRobust) ## inaccuracy
 }
 
-#### time-dependent covariates ###
-\dontrun{
-library(survival)
-fit <- coxph(Surv(time, status) ~ celltype+karno + age + trt, veteran)
-vet2 <- survSplit(Surv(time, status) ~., veteran,
-                       cut=c(60, 120), episode ="timegroup")
-fitTD <- coxph(Surv(tstart, time, status) ~ celltype +karno + age + trt,
-               data= vet2,x=1)
-set.seed(16)
-resVet <- ate(fitTD,formula=Hist(entry=tstart,time=time,event=status)~1,
-          data = vet2, treatment = "celltype",
-        times=5,verbose=1,
-        landmark = c(0,30,60,90), cause = 1, B = 50, se = 1,
-        band = FALSE, mc.cores=1)
-summary(resVet)
-}
-
-\dontrun{
-set.seed(137)
-d=sampleDataTD(127)
-library(survival)
-d[,status:=1*(event==1)]
-d[,X3:=as.factor(X3)]
-## ignore competing risks
-cox1TD <- coxph(Surv(start,time, status,type="counting") ~ X3+X5+X6+X8,
-                data=d, x = TRUE)
-resTD1 <- ate(cox1TD,formula=Hist(entry=start,time=time,event=status)~1,
-        data = d, treatment = "X3", contrasts = NULL,
-        times=.5,verbose=1,
-        landmark = c(0,0.5,1), B = 20, se = 1,
-        band = FALSE, mc.cores=1)
-resTD1
-## account for competing risks
-cscTD <- CSC(Hist(time=time, event=event,entry=start) ~ X3+X5+X6+X8, data=d)
-set.seed(16)
-resTD <- ate(cscTD,formula=Hist(entry=start,time=time,event=event)~1,
-        data = d, treatment = "X3", contrasts = NULL,
-        times=.5,verbose=1,
-        landmark = c(0,0.5,1), cause = 1, B = 20, se = 1,
-        band = FALSE, mc.cores=1)
-resTD
-}
 }
 \references{
 Brice Maxime Hugues Ozenne, Thomas Harder Scheike, Laila Staerk, and Thomas
@@ -312,10 +343,11 @@ Brice Maxime Hugues Ozenne, Thomas Harder Scheike, Laila Staerk, and Thomas
    (3):751--763, 2020.
 }
 \seealso{
-\code{\link{as.data.table}} to extract the estimates in a \code{data.table} object.
-\code{\link{autoplot.ate}} for a graphical representation the standardized risks.
-\code{\link{confint.ate}} to compute (pointwise/simultaneous) confidence intervals and (unadjusted/adjusted) p-values, possibly using a transformation.
-\code{\link{summary.ate}} for a table containing the standardized risks over time and treatment/strata.
+\code{\link{autoplot.ate}} for a graphical representation the standardized risks. \cr
+\code{\link{coef.ate}} to output estimates for the the average risk, or difference in average risks, or ratio between average risks. \cr
+\code{\link{confint.ate}} to output a list containing all estimates (average & difference & ratio) with their confidence intervals and p-values. \cr
+\code{\link{model.tables.ate}} to output a data.frame containing one type of estimates (average or difference or ratio) with its confidence intervals and p-values.   \cr
+\code{\link{summary.ate}} for displaying in the console a summary of the results.
 }
 \author{
 Brice Ozenne \email{broz@sund.ku.dk}

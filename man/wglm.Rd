@@ -5,29 +5,42 @@
 \title{Logistic Regression Using IPCW}
 \usage{
 wglm(
-  regressor.event,
-  formula.censor,
+  formula.event,
   times,
   data,
+  formula.censor = ~1,
   cause = NA,
-  fitter = "coxph",
-  product.limit = FALSE
+  fitter = NULL,
+  ties = NULL,
+  product.limit = NULL,
+  iid = FALSE,
+  se = TRUE,
+  store = NULL
 )
 }
 \arguments{
-\item{regressor.event}{[formula] a formula with empty left hand side and the covariates for the logistic regression on the right hand side.}
-
-\item{formula.censor}{[formula] a formula used to fit the censoring model.}
+\item{formula.event}{[formula] a formula with a Surv object on the left hand side and the covariates for the logistic regression on the right hand side.}
 
 \item{times}{[numeric vector] time points at which to model the probability of experiencing an event.}
 
 \item{data}{[data.frame] dataset containing the time at which the event occured, the type of event, and regressors used to fit the censoring and logistic models.}
 
+\item{formula.censor}{[formula] an optional formula indicating on its right hand side the covariates for the censoring model.}
+
 \item{cause}{[character or numeric] the cause of interest. Defaults to the first cause.}
 
 \item{fitter}{[character] routine to fit the Cox regression models.}
 
+\item{ties}{[character] method used to handle ties when using a Cox model (\code{"breslow"} or \code{"efron"}).
+Ignored if fitter equals to \code{"prodlim"}.}
+
 \item{product.limit}{[logical] if \code{TRUE} the survival is computed using the product limit estimator.}
+
+\item{iid}{[logical] should the influence function of the logistic regression parameters be computed, accounting for the uncertainty of the weights. This can be computationally and memory intensive.}
+
+\item{se}{[logical] should the variance-covariance matrix of the logistic regression parameters be stored, accounting for the uncertainty of the weights. This can be computationally and memory intensive.}
+
+\item{store}{[vector] when evaluating the iid, should prediction be only computed for unique covariate sets and mapped back to the original dataset (\code{data="minimal"}). Otherwise use \code{data="full"}.}
 }
 \value{
 an object of class \code{"wglm"}.
@@ -45,37 +58,51 @@ and where the outcome is the indicator of having experience the event of interes
 \examples{
 library(survival)
 
+#### simulate data ####
 set.seed(10)
 n <- 250
 tau <- 1:5
 d <- sampleData(n, outcome = "competing.risks")
-dFull <- d[event!=0] ## remove censoring
-dSurv <- d[event!=2] ## remove competing risk
+dFull <- d[event!=0] ## (artificially) remove censoring
+dSurv <- d[event!=2] ## (artificially) remove competing risk
 
 #### no censoring ####
-e.wglm <- wglm(regressor.event = ~ X1, formula.censor = Surv(time,event==0) ~ 1,
+e.wglm <- wglm(Surv(time,event) ~ X1, 
                times = tau, data = dFull, product.limit = TRUE)
-e.wglm ## same as a logistic regression
+e.wglm ## same as a logistic regression at each timepoint
+
+coef(e.wglm)
+confint(e.wglm)
+model.tables(e.wglm)
 
 summary(ate(e.wglm, data = dFull, times = tau, treatment = "X1", verbose = FALSE))
-
 #### right-censoring ####
 ## no covariante in the censoring model (independent censoring)
-eC.wglm <- wglm(regressor.event = ~ X1, formula.censor = Surv(time,event==0) ~ 1,
+eC.wglm <- wglm(Surv(time,event) ~ X1,
                times = tau, data = dSurv, product.limit = TRUE)
-eC.wglm
+summary(eC.wglm)
+
+weights(eC.wglm)
 
 ## with covariates in the censoring model
-eC2.wglm <- wglm(regressor.event = ~ X1 + X8,
-                formula.censor = Surv(time,event==0) ~ X1*X8,
+eC2.wglm <- wglm(Surv(time,event) ~ X1 + X8, formula.censor = ~ X1*X8,
                  times = tau, data = dSurv)
 eC2.wglm
 
 #### Competing risks ####
 ## here Kaplan-Meier as censoring model
-eCR.wglm <- wglm(regressor.event = ~ X1,
-                 formula.censor = Surv(time,event==0) ~ strata(X1),
-                 times = tau, data = d, cause = 1, product.limit = TRUE)
+eCR.wglm <- wglm(Surv(time,event) ~ X1, formula.censor = ~X1,
+                 times = tau, data = d)
 eCR.wglm
-
+summary(eCR.wglm)
+eCR.wglm <- wglm(Surv(time,event) ~ X1, formula.censor = ~X1,
+                 times = tau, data = d)
+}
+\seealso{
+\code{\link{coef.wglm}} to output the estimated parameters from the logistic regression. \cr
+\code{\link{confint.wglm}} to output the estimated parameters from the logistic regression with their confidence interval. \cr
+\code{\link{model.tables.wglm}} to output a data.frame containing the estimated parameters from the logistic regression with its confidence intervals and p-values.   \cr
+\code{\link{predictRisk.wglm}} to evaluate event probabilities (e.g. survival probabilities) conditional on covariates. \cr
+\code{summary.wglm} for displaying in the console a summary of the results. \cr
+\code{\link{weights.wglm}} to extract the IPCW weights.
 }

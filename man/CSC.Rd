@@ -25,10 +25,11 @@ regression models for all causes.  If \code{"survival"} fit one
 cause-specific Cox regression model for the cause of interest and
 also a Cox regression model for event-free survival.}
 
-\item{fitter}{Routine to fit the Cox regression models.
-If \code{coxph} use \code{survival::coxph} else use \code{rms::cph}.}
+\item{fitter}{Character string specifying the routine to fit the Cox regression models. Available are
+\code{"coxph"} for \link[survival]{coxph}, \code{"coxph"} for \link[rms]{cph},
+\code{"phreg"} for \link[mets]{phreg}, and \code{"glmnet"} for \link[glmnet]{glmnet}.}
 
-\item{...}{Arguments given to \code{fitter}, e.g., \code{coxph}.}
+\item{...}{Arguments given to the function defined by argument \code{fitter}.}
 }
 \value{
 \item{models }{a list with the fitted (cause-specific) Cox
@@ -55,6 +56,23 @@ data(Melanoma)
 fit1 <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
             data=Melanoma)
 print(fit1)
+
+\dontrun{
+library(rms)
+fit1a <- CSC(list(Hist(time,status)~sex+rcs(age,3),Hist(time,status)~invasion+epicel+log(thick)),
+            data=Melanoma,fitter="cph")
+print(fit1a)
+}
+\dontrun{
+library(glmnet)
+# lasso
+fit1b <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
+            data=Melanoma,fitter="glmnet")
+# rigde regression
+fit1c <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
+            data=Melanoma,fitter="glmnet")
+print(fit1b)
+}
 \dontrun{
 library(Publish)
 publish(fit1)
@@ -125,13 +143,17 @@ library(survival)
 fit5.2 <- CSC(Hist(time,status)~invasion+epicel+age+strata(sex),
             data=Melanoma,
             surv.type="surv",cause=2)
-## now this does not work
-try(predictRisk(fit5.2,cause=1,newdata=Melanoma,times=4))
+## now this does not work because the object was fitted with surv.type='surv'
+try(predictRisk(fit5.2,cause=1,newdata=Melanoma,times=4000))
 
 ## but this does
 predictRisk(fit5.2,cause=2,newdata=Melanoma,times=100)
 predict(fit5.2,cause=2,newdata=Melanoma,times=100)
 predict(fit5.2,cause=2,newdata=Melanoma[4,],times=100)
+
+fit5.2 <- CSC(Hist(time,status)~invasion+epicel+age+strata(sex),
+            data=Melanoma,
+            surv.type="hazard",cause=2)
 
 }
 \references{
@@ -147,7 +169,7 @@ competing risks: Interpretation, link functions, and prediction. Statistics
 in Medicine, 31(29):3921--3930, 2012.
 }
 \seealso{
-\code{\link{coxph}}
+\code{\link[survival]{coxph}}
 }
 \author{
 Thomas A. Gerds \email{tag@biostat.ku.dk} and Ulla B. Mogensen

@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02)
 ## Version:
-## last-updated: Dec 19 2023 (17:08) 
+## last-updated: May 14 2025 (17:23) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 532
+##     Update #: 624
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -50,7 +50,6 @@
 #' @param average.iid Should the average iid decomposition be output using an attribute?
 #' @param product.limit If \code{TRUE} the survival is computed using the product limit estimator.
 #' Otherwise the exponential approximation is used (i.e. exp(-cumulative hazard)).
-#' @param landmark The starting time for the computation of the cumulative risk.
 #' @param truncate If \code{TRUE} truncates the predicted risks to be in the range [0, 1]. For now only implemented for the Cause Specific Cox model. 
 #' @param \dots Additional arguments that are passed on to the current method.
 #'
@@ -144,7 +143,7 @@
 #'
 #' @export
 predictRisk <- function(object,newdata,...){
-    UseMethod("predictRisk",object)
+    UseMethod(generic = "predictRisk",object = object)
 }
 
 ## * predictRisk.default
@@ -196,12 +195,10 @@ predictRisk.numeric <- function(object,newdata,times,cause,...){
 ##' @rdname predictRisk
 ##' @method predictRisk glm
 predictRisk.glm <- function(object, newdata, iid = FALSE, average.iid = FALSE,...){
-
+    dots <- list(...)
     if (object$family$family=="binomial"){
-
         n.obs <- NROW(newdata)
         out <- predict(object, type = "response", newdata = newdata, se = FALSE)
-
         if(iid || average.iid){
             ## ** prepare average.iid
             if(average.iid){
@@ -229,8 +226,8 @@ predictRisk.glm <- function(object, newdata, iid = FALSE, average.iid = FALSE,..
             ## iid.beta <- lava::iid(object)
             wobject <- list(times = "1", fit = list("1"=object))
             class(wobject) <- "wglm"
-            object.score <- lava::score(wobject, times = "1", simplifies = FALSE, indiv = TRUE)
-            object.info <- lava::information(wobject, times = "1", simplifies = FALSE)
+            object.score <- lava::score(wobject, times = "1", simplify = FALSE, indiv = TRUE)
+            object.info <- lava::information(wobject, times = "1", simplify = FALSE)
             iid.beta <- object.score[["1"]] %*% solve(object.info[["1"]])
 
             ff.rhs <- stats::delete.response(stats::terms(stats::formula(object)))
@@ -263,7 +260,11 @@ predictRisk.glm <- function(object, newdata, iid = FALSE, average.iid = FALSE,..
 
         ## ** set correct level
         ## hidden argument: enable to ask for the prediction of Y==1 or Y==0
-        level <- list(...)$level
+        level <- dots$level
+        type <- dots$type ## hidden argument for ate
+        if(identical(type,"survival")){
+            stop("Unkown argument \'type\' for predictRisk.glm: use argument \'level\' instead. \n")
+        }
         if(!is.null(level)){
             matching.Ylevel <- table(object$data[[all.vars(formula(object))[1]]],
                                      object$y)
@@ -565,28 +566,17 @@ predictRisk.coxph <- function(object,
                               ...){
     dots <- list(...)
     type <- dots$type ## hidden argument for ate
-    store.iid <- dots$store ## hidden argument for ate
+    outPred <- predictCox(object=object,
+                          newdata=newdata,
+                          times=times,
+                          se = FALSE,
+                          iid = iid,
+                          diag = diag,
+                          average.iid = average.iid,
+                          store = dots$store, ## hidden argument
+                          product.limit = product.limit,
+                          type="survival")
 
-    if(product.limit){
-        outPred <- predictCoxPL(object=object,
-                                newdata=newdata,
-                                times=times,
-                                iid = iid,
-                                average.iid = average.iid,
-                                keep.times=FALSE,
-                                diag = diag,
-                                store.iid = store.iid,
-                                type="survival")
-    }else{
-        outPred <- predictCox(object=object,
-                              newdata=newdata,
-                              times=times,
-                              iid = iid,
-                              diag = diag,
-                              average.iid = average.iid,
-                              store.iid = store.iid,
-                              type="survival")
-    }
     if(identical(type,"survival")){
         out <- outPred$survival
     }else{
@@ -612,73 +602,6 @@ predictRisk.coxph <- function(object,
     }
 
     return(out)
-}
-
-## * predictRisk.coxphTD
-##' @export
-##' @rdname predictRisk
-##' @method predictRisk coxphTD
-predictRisk.coxphTD <- function(object,newdata,times,landmark,...){
-    stopifnot(attr(object$y,"type")=="counting")
-    bh <- survival::basehaz(object,centered=TRUE)
-    Lambda0 <- bh[,1]
-    etimes <- bh[,2]
-    lp <- predict(object,newdata=newdata,type="lp")
-    p <- do.call("cbind",lapply(times,function(ttt){
-        index <- prodlim::sindex(eval.times=c(landmark,landmark+ttt),jump.times=etimes)
-        Lambda0.diff <- c(0,Lambda0)[1+index[2]] - c(0,Lambda0)[1+index[1]]
-        1-exp(-Lambda0.diff * exp(lp))
-    }))
-    if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)){
-        stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
-    }
-    return(p)
-}
-
-
-## * predictRisk.CSCTD
-##' @export
-##' @rdname predictRisk
-##' @method predictRisk CSCTD
-predictRisk.CSCTD <- function(object,newdata,times,cause,landmark,...){
-    stopifnot(attr(object$models[[1]]$y,"type")=="counting")
-    if (missing(cause)) cause <- object$theCause
-    else{
-        ## cause <- prodlim::checkCauses(cause,object$response)
-        cause <- unique(cause)
-        if (!is.character(cause)) cause <- as.character(cause)
-        fitted.causes <- prodlim::getStates(object$response)
-        if (!(all(cause %in% fitted.causes))){
-            stop(paste0("Cannot find requested cause(s) in object\n\n",
-                        "Requested cause(s): ",
-                        paste0(cause,collapse=", "),
-                        "\n Available causes: ",
-                        paste(fitted.causes,collapse=", "),"\n"))
-        }
-    }
-    causes <- object$causes
-    index.cause <- which(causes == cause)
-    bh <- lapply(1:length(object$models),function(m){
-        survival::basehaz(object$models[[m]],centered=TRUE)
-    })
-    lp <- lapply(1:length(object$models),function(m){
-        predict(object$models[[m]],
-                newdata=newdata,
-                type="lp")
-    })
-    p <- do.call("cbind",lapply(times,function(ttt){
-        hazard <- lapply(1:length(object$models),function(m){
-            index <- sindex(eval.times=c(landmark,landmark+ttt),jump.times=bh[[m]][,2])
-            bh.m <- bh[[m]][,1]
-            exp(lp[[m]])*(c(0,bh.m)[1+index[2]] - c(0,bh.m)[1+index[1]])
-        })
-        surv <- exp(- Reduce("+",hazard))
-        surv*hazard[[index.cause]]
-    }))
-    if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)){
-        stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
-    }
-    return(p)
 }
 
 
@@ -731,38 +654,85 @@ predictRisk.selectCox <- function(object,newdata,times,...){
 ##' @export
 ##' @rdname predictRisk
 ##' @method predictRisk prodlim
-predictRisk.prodlim <- function(object,newdata,times,cause,...){
+predictRisk.prodlim <- function(object,
+                                newdata,
+                                times,
+                                cause,
+                                diag = FALSE,
+                                iid = FALSE,
+                                average.iid = FALSE,...){
     ## require(prodlim)
-    if (object$model[[1]]=="competing.risks" && missing(cause))
+    if (object$model[[1]]=="competing.risks" && missing(cause)){
         stop(paste0("Cause is missing. Should be one of the following values: ",paste(attr(object$model.response,"states"),collapse=", ")))
-    p <- predict(object=object,
-                 cause=cause,
-                 type="cuminc",
-                 newdata=newdata,
-                 times=times,
-                 mode="matrix",
-                 level.chaos=1)
-    ## if the model has no covariates
-    ## then all cases get the same prediction
-    ## in this exceptional case we return a vector
-    if (NROW(p)==1 && NROW(newdata)>=1)
-        p <- as.vector(p)
-    ## p[is.na(p)] <- 0
-    if (is.null(dim(p))){
-        if (length(p)!=length(times))
-            stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
     }
-    else{
-        if (NROW(p) != NROW(newdata) || NCOL(p) != length(times))
-            stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
+
+    if(diag == FALSE && iid == FALSE && average.iid == FALSE){
+        p <- predict(object=object,
+                     cause=cause,
+                     type="cuminc",
+                     newdata=newdata,
+                     times=times,
+                     mode="matrix",
+                     level.chaos=1)
+        ## if the model has no covariates
+        ## then all cases get the same prediction
+        ## in this exceptional case we return a vector
+        if (NROW(p)==1 && NROW(newdata)>=1)
+            p <- as.vector(p)
+        ## p[is.na(p)] <- 0
+        if (is.null(dim(p))){
+            if (length(p)!=length(times))
+                stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
+        }
+        else{
+            if (NROW(p) != NROW(newdata) || NCOL(p) != length(times))
+                stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",NROW(newdata)," x ",length(times),"\nProvided prediction matrix: ",NROW(p)," x ",NCOL(p),"\n\n",sep=""))
+        }
+
+    }else{ ## NOTE: can compute prediction at individual specific times (argument diag = TRUE, e.g. time 1 for id=1 and time 5 for id = 2)
+        ##       can also return the influence function
+        ## but does not handle competing risk
+        dots <- list(...)
+        type <- dots$type ## hidden argument    
+        product.limit <- dots$product.limit ## hidden argument    
+        iPred <- predictCox(object, diag = diag, newdata = newdata, times = times,
+                            type = "survival", product.limit = product.limit, iid = iid, average.iid = average.iid,
+                            store = dots$store) ## hidden argument
+
+        if(is.null(type) || "risk" == type){
+            p <- 1-iPred$survival
+            if(iid){
+                attr(p,"iid") <- -iPred$survival.iid
+            }
+            if(average.iid){
+                if(is.list(iPred$survival.average.iid)){
+                    attr(p,"average.iid") <- lapply(iPred$survival.average.iid, function(iM){-iM})
+                }else{
+                    attr(p,"average.iid") <- -iPred$survival.average.iid
+                }
+            }
+        }else if("survival" == type){
+            p <- iPred$survival
+            if(iid){
+                attr(p,"iid") <- iPred$survival.iid
+            }
+            if(average.iid){
+                attr(p,"average.iid") <- iPred$survival.average.iid
+            }
+        }else{
+            stop("Incorrect argument \'type\': should be \"survival\" or \"risk\". \n")
+        }
     }
-    p
+
+    ## ** export
+    return(p)
+
 }
 
 ## * predictRisk.survfit
-##' @export
 ##' @rdname predictRisk
 ##' @method predictRisk survfit
+##' @export
 predictRisk.survfit <- function(object,newdata,times,...){
     p <- predict.survfit(object,newdata=newdata,times=times,type="cuminc",bytimes=TRUE,fill="last")
     if (NROW(p) != NROW(newdata) || NCOL(p) != length(times))
@@ -770,6 +740,7 @@ predictRisk.survfit <- function(object,newdata,times,...){
     p
 }
 
+##' @export
 predict.survfit <- function(object,newdata,times,bytimes=TRUE,type="cuminc",fill="last",...){
     if (length(class(object))!=1 || class(object)[[1]]!="survfit" || object$type[[1]] !="right")
         stop("Predictions only available \nfor class 'survfit', possibly stratified Kaplan-Meier fits.\n For class 'cph' Cox models see survest.cph.")
@@ -969,7 +940,8 @@ predictRisk.CauseSpecificCox <- function (object, newdata, times, cause,
     if(is.null(type)){
         type <- "absRisk"
     }
-    store.iid <- dots$store.iid
+
+    ## prediciton
     outPred <- predict(object=object,
                        newdata=newdata,
                        times=times,
@@ -980,7 +952,7 @@ predictRisk.CauseSpecificCox <- function (object, newdata, times, cause,
                        diag = diag,
                        average.iid = average.iid,
                        product.limit = product.limit,
-                       store.iid = store.iid,
+                       store = dots$store, ## hidden argument
                        type = type)
     
     out <- outPred[[type]]
@@ -1290,7 +1262,7 @@ predictRisk.flexsurvreg <- function(object, newdata, times, ...) {
     newdata <- data.frame(newdata)
     p <- matrix(0, NROW(newdata), length(times))
     term <- attr(terms(as.formula(object$call$formula)), "term.labels")
-    sm <- summary(object, newdata = newdata[, term], t = times, start = 0, B = 0) #no confidence interval simulations
+    sm <- summary(object, newdata = newdata[, term, drop = FALSE], t = times, start = 0, B = 0) #no confidence interval simulations
     for (i in 1:NROW(newdata)){
         p[i,] <- sm[[i]][,2]
     }
@@ -1308,7 +1280,6 @@ predictRisk.Hal9001 <- function(object,
                                 cause,
                                 ...){
     stopifnot(object$family=="cox")
-    # convert covariates to dummy variables
     newdata$dummy.time=rep(1,NROW(newdata))
     newdata$dummy.event=rep(1,NROW(newdata))
     rhs <- as.formula(delete.response(object$terms))
@@ -1321,119 +1292,76 @@ predictRisk.Hal9001 <- function(object,
     newdata$dummy.event = NULL
     # blank Cox object obtained with riskRegression:::coxModelFrame
     info <- object$surv_info
-    hal_pred <- predict(object$fit,new_data=EHF$design)
+    hal_pred <- as.numeric(predict(object$fit,new_data=EHF$design))
     L0 <- riskRegression::baseHaz_cpp(starttimes = info$start,
                                       stoptimes = info$stop,
                                       status = info$status,
-                                      eXb = hal_pred,
+                                      eXb = info$eXb,
                                       strata = 1,
                                       nPatients = NROW(info$stop),
                                       nStrata = 1,
                                       emaxtimes = max(info$stop),
-                                      predtimes = sort(unique(info$stop)),
+                                      predtimes = times, 
                                       cause = 1,
-                                      Efron = TRUE)
+                                      Efron = TRUE,
+                                      reverse = FALSE)
     hal_Surv <- exp(-hal_pred%o%L0$cumhazard)
-    where <- sindex(jump.times=unique(info$stop),eval.times=times)
-    p <- cbind(0,1-hal_Surv)[,1+where]
+    p <- 1-hal_Surv
     if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)) {
         stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ", NROW(newdata), " x ", length(times), "\nProvided prediction matrix: ", NROW(p), " x ", NCOL(p), "\n\n", sep = ""))
     }
     p
 }
 
+
 ## * predictRisk.GLMnet
 ##' @rdname predictRisk
 ##' @method predictRisk GLMnet
 ##' @export
-predictRisk.GLMnet <- function(object,newdata,times=NA,...) {
-  args <- list(...)
-  if (length(args$lambda)>0){
-    stopifnot(all(is.numeric(args$lambda)))
-    if (length(args$lambda)>1)
-      stop("You must pick a single lambda value for predictRisk!")
-    else{
-      pos.lambda <- match(args$lambda,object$lambda,nomatch = 0)
-      if (pos.lambda == 0)
-        stop("The fitted model was not fitted with the specified penalty parameter (lambda)")
+predictRisk.GLMnet <- function(object,
+                               newdata,
+                               times,
+                               product.limit = FALSE,
+                               diag = FALSE,
+                               ...){
+    has_survival <- inherits(object$fit,"coxnet")
+    dots <- list(...)
+    type <- dots$type ## hidden argument for ate
+    if (has_survival){
+        pred <- 1-predictCox(object=object,
+                             newdata=newdata,
+                             times=times,
+                             iid = FALSE,
+                             confint = FALSE,
+                             diag = diag,
+                             average.iid = FALSE,
+                             product.limit = product.limit,
+                             type="survival")$survival
+        if(identical(type,"survival")){
+            pred <- 1-pred
+        }
+        if (NROW(pred) != NROW(newdata) || NCOL(pred) != length(times)) {
+            stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ", NROW(newdata), " x ", length(times), "\nProvided prediction matrix: ", NROW(pred), " x ", NCOL(pred), "\n\n", sep = ""))
+        }
+        pred
+    }else{
+        ff <- stats::formula(stats::delete.response(object$terms))
+        newdata <- Publish::specialFrame(formula = ff,
+                                         data = newdata,
+                                         strip.specials = c("unpenalized"),
+                                         strip.arguments = NULL,
+                                         specials = c("unpenalized"),
+                                         unspecials.design = TRUE,
+                                         specials.design = TRUE,
+                                         response = FALSE)
+        if (NCOL(newdata$unpenalized)>0){
+            newX <- cbind(newdata$design,newdata$unpenalized)
+        }else{
+            newX <- newdata$design
+        }
+        p <- predict(object$fit,newx=newX,type = "response", s=object$selected.lambda)
+        p
     }
-  }else{
-    pos.lambda <- 0
-  }
-  lambda=cv=NULL
-  # library(glmnet)
-  # requireNamespace(c("prodlim","glmnet"))
-  # predict.cv.glmnet <- utils::getFromNamespace("predict.cv.glmnet","glmnet")
-  # predict.glmnet <- utils::getFromNamespace("predict.glmnet","glmnet")
-  rhs <- as.formula(delete.response(object$terms))
-  if (length(info <- object$surv_info) == 0){
-    xnew <- model.matrix(rhs,data=newdata)
-    if (is.null(args$lambda) && object$cv){
-      p <- predict(object$fit,newx=xnew,type = "response", s="lambda.min")
-    }
-    else if (pos.lambda == 0 && !object$cv){
-      if (length(object$lambda) == 1){
-        p <- predict(object$fit,newx=xnew,type = "response", s=object$lambda)
-      }
-      else {
-        stop("Object fitted with multiple lambdas. You must pick one lambda for predictRisk!")
-      }
-    }
-    else {
-      p <- predict(object$fit,newx=xnew,type = "response", s=args$lambda)
-    }
-  } else {
-    # convert covariates to dummy variables
-    newdata$dummy.time=rep(1,NROW(newdata))
-    newdata$dummy.event=rep(1,NROW(newdata))
-    dummy.formula=stats::update.formula(rhs,"prodlim::Hist(dummy.time,dummy.event)~.")
-    EHF <- prodlim::EventHistory.frame(formula=dummy.formula,data=newdata,specials = NULL,unspecialsDesign=TRUE)
-    newdata$dummy.time = NULL
-    newdata$dummy.event = NULL
-    # blank Cox object obtained with riskRegression:::coxModelFrame
-    if (pos.lambda == 0 && object$cv){
-      coxnet_pred <- c(exp(predict(object$fit,newx=EHF$design,type = "link", s="lambda.min")))
-      lambda <- object$fit$lambda.min ## is needed for train_eXb
-    }
-    else if (pos.lambda == 0 && !object$cv){
-      if (length(object$lambda) == 1){
-        coxnet_pred <- c(exp(predict(object$fit,newx=EHF$design,type = "link", s=object$lambda)))
-        lambda <- object$lambda
-      }
-      else {
-        stop("Object fitted with multiple lambdas. You must pick a single value for lambda.")
-      }
-    } else {
-      if (all((pos.lambda)>0)){
-        coxnet_pred <- c(exp(predict(object$fit,newx=EHF$design,type = "link", s=args$lambda)))
-        lambda <- args$lambda
-      }
-      else {
-        stop(paste0("The fitted model was not fitted with the following penalty parameters (lambdas): ",
-                    paste0(args$lambda[pos.lambda == 0],collapse = ", ")))
-      }
-    }
-    train_eXb <- c(exp(predict(object$fit,newx=object$sorted_x_train,type = "link", s=lambda)))
-    L0 <- riskRegression::baseHaz_cpp(starttimes = info$start,
-                                      stoptimes = info$stop,
-                                      status = info$status,
-                                      eXb = train_eXb,
-                                      strata = 1,
-                                      nPatients = NROW(info$stop),
-                                      nStrata = 1,
-                                      emaxtimes = max(info$stop),
-                                      predtimes = sort(unique(info$stop)),
-                                      cause = 1,
-                                      Efron = TRUE)$cumhazard
-    ## if (any(is.na(L0))) browser()
-    coxnetSurv <- exp(-coxnet_pred%o%L0)
-    where <- sindex(jump.times=unique(info$stop),eval.times=times)
-    p <- cbind(0,1-coxnetSurv)[,1+where]
-  }
-  if (NROW(p) != NROW(newdata) || NCOL(p) != length(times)) {
-    stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ", NROW(newdata), " x ", length(times), "\nProvided prediction matrix: ", NROW(p), " x ", NCOL(p), "\n\n", sep = ""))
-  }
-  p
 }
 
 
@@ -1539,6 +1467,157 @@ predictRisk.singleEventCB <- function(object, newdata, times, cause, ...) {
     ## }
     ## p
 ## }
+
+## * predictRisk.wglm
+#' @rdname predictRisk
+#' @method predictRisk wglm
+#' @export
+predictRisk.wglm <- function(object, newdata, times = NULL, 
+                             product.limit = NULL, diag = FALSE, iid = FALSE, average.iid = FALSE, ...){
+
+    dots <- list(...)
+    if(is.null(dots$se)){ ## hidden se argument
+        se <- "robust"
+    }else{
+        se <- match.arg(se, c("robust","robust-wknown"))
+    }
+
+    ## ** extract information and normalize arguments
+    if(is.null(times)){
+        times <- object$times
+    }else{
+        if(any(times %in% object$times == FALSE)){
+            stop("Incorrect specification of argument \'times\' \n",
+                 "Should be one of \"",paste0(times,collapse="\" \""),"\" \n")
+            
+        }
+    }
+
+    if(is.null(product.limit)){
+        product.limit <- object$product.limit
+    }
+    n.times <- length(times)
+    n.sample <- sum(coxN(object))
+    n.newdata <- NROW(newdata)
+
+    if(average.iid){
+        if(is.null(attr(average.iid,"factor"))){
+            factor <- list(matrix(1, nrow = n.newdata, ncol = n.times))
+        }else{
+            factor <- attr(average.iid, "factor")
+            if(is.matrix(factor)){
+                factor <- list(factor)
+            }
+            if(!is.list(factor)){
+                stop("Attribute \'factor\' for argument \'average.iid\' must be a list \n")
+            }
+            if(any(sapply(factor, is.matrix)==FALSE)){
+                stop("Attribute \'factor\' for argument \'average.iid\' must be a list of matrices \n")
+            }
+            for(iFactor in 1:length(factor)){ ## iFactor <- 1
+                ## when only one column and diag = FALSE, use the same weights at all times
+                if((diag == FALSE) && (NCOL(factor[[iFactor]])==1) && (n.times > 1)){
+                    factor[[iFactor]] <- matrix(factor[[iFactor]][,1],
+                                                nrow = NROW(factor[[iFactor]]),
+                                                ncol = n.times, byrow = FALSE)
+                }
+                ## check dimensions
+                if(any(dim(factor[[iFactor]])!=c(n.newdata, diag + (1-diag)*n.times))){
+                    stop("Attribute \"factor\" of argument \'average.iid\' must be a list of matrices of size ",n.newdata,",",diag + (1-diag)*n.times," \n")
+                }
+            }
+        }
+        n.factor <- length(factor)
+    }
+
+    ## hidden argument: enable to ask for the prediction of Y==1 or Y==0
+    level <- list(...)$level
+    type <- dots$type ## hidden argument for ate
+    if(identical(type,"survival")){
+        stop("Unkown argument \'type\' for predictRisk.wglm: use argument \'level\' instead. \n")
+    }
+
+    ## ** prepare output
+    out <- matrix(NA, nrow = n.newdata, ncol = n.times)
+    if(iid){
+        attr(out,"iid") <- array(NA, dim = c(n.sample, n.times, n.newdata))
+    }
+    if(average.iid){
+        attr(out,"average.iid") <- lapply(1:n.factor, function(x){matrix(NA, nrow = n.sample, ncol = n.times)})
+        if(!is.null(names(factor))){
+            names(attr(out,"average.iid")) <- names(factor)
+        }
+    }
+
+    if(iid || average.iid){
+        if(se=="robust"){
+            object.iid <- lava::iid(object, simplify = FALSE, times = times)
+        }else if(se == "robust-wknown"){
+            object.iid <- lapply(object$fit[match(times, object$times)],lava::iid)
+        }
+    }
+
+    
+    for(iTime in 1:n.times){
+        iTime2 <- which(object$times == times[iTime])
+        iObject <- object$fit[[iTime2]]
+        iFormula <- stats::formula(iObject)
+        
+        ## ** identify correct level
+        if(!is.null(level)){
+            matching.Ylevel <- table(iObject$data[[all.vars(formula(iObject))[1]]],
+                                     iObject$y)
+            all.levels <- rownames(matching.Ylevel)
+            level <- match.arg(level, all.levels)
+
+            index.level <- which(matching.Ylevel[level,]>0)
+            if(length(index.level) > 1){
+                stop("Unknown value for the outcome variable \n")
+            }
+        }else{
+            index.level <- 2
+        }
+
+        ## ** point estimate
+        if(index.level == 1){
+            out[,iTime] <- 1-predict(iObject, type = "response", newdata = newdata, se = FALSE)
+        }else{
+            out[,iTime] <- predict(iObject, type = "response", newdata = newdata, se = FALSE)
+        }
+        
+        ## ** uncertainty (chain rule)
+        if(iid || average.iid){
+            iid.beta <- object.iid[[iTime]]
+            newX <- model.matrix(delete.response(terms(iFormula)), newdata)
+            Xbeta <- predict(iObject, type = "link", newdata = newdata, se = FALSE)
+
+            if(average.iid){
+                for(iFactor in 1:n.factor){
+                    iE.X <- colMeans(colMultiply_cpp(newX, scale = factor[[iFactor]][,iTime] * exp(-Xbeta)/(1+exp(-Xbeta))^2))
+                    if(index.level == 1){
+                        attr(out,"average.iid")[[iFactor]][,iTime] <- -iid.beta %*% iE.X
+                    }else{
+                        attr(out,"average.iid")[[iFactor]][,iTime] <- iid.beta %*% iE.X
+                    }
+                }
+            }
+            if(iid){
+                if(index.level == 1){
+                    attr(out,"iid")[,iTime,] <- -iid.beta %*% t(colMultiply_cpp(newX, scale = exp(-Xbeta)/(1+exp(-Xbeta))^2))
+                }else{
+                    attr(out,"iid")[,iTime,] <- iid.beta %*% t(colMultiply_cpp(newX, scale = exp(-Xbeta)/(1+exp(-Xbeta))^2))
+                }
+            }
+        }
+    }
+
+    ## ** export
+    if(average.iid && is.null(attr(average.iid,"factor"))){
+        attr(out,"average.iid") <- attr(out,"average.iid")[[1]]
+    }
+    return(out)
+}
+
 #----------------------------------------------------------------------
 ### predictRisk.R ends here
 

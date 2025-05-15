@@ -9,8 +9,8 @@ plotCalibration(
   models,
   times,
   method = "nne",
-  cens.method,
-  round = TRUE,
+  cens.method = "local",
+  round = 2,
   bandwidth = NULL,
   q = 10,
   bars = FALSE,
@@ -142,7 +142,7 @@ interpretable on a percent scale.}
 
 \item{...}{Used to control the subroutines: plot, axis, lines,
 barplot, legend, addtable2plot, points (pseudo values), rug. See
-\code{\link{SmartControl}}.}
+\code{\link[prodlim]{SmartControl}}.}
 }
 \description{
 Plot Calibration curves for risk prediction models

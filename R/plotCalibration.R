@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Feb 23 2017 (11:15) 
 ## Version: 
-## last-updated: Dec 19 2023 (14:13) 
+## last-updated: Apr 29 2025 (08:05) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 392
+##     Update #: 414
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -91,7 +91,7 @@
 ##' @param cex Default cex used for legend and labels.
 ##' @param ... Used to control the subroutines: plot, axis, lines,
 ##'     barplot, legend, addtable2plot, points (pseudo values), rug. See
-##'     \code{\link{SmartControl}}.
+##'     \code{\link[prodlim]{SmartControl}}.
 ##' @examples
 ##' library(prodlim)
 ##' # binary
@@ -134,8 +134,8 @@ plotCalibration <- function(x,
                             models,
                             times,
                             method="nne",
-                            cens.method,
-                            round=TRUE,
+                            cens.method = "local",
+                            round=2,
                             bandwidth=NULL,
                             q=10,
                             bars=FALSE,
@@ -143,7 +143,6 @@ plotCalibration <- function(x,
                             names="quantiles",
                             pseudo=FALSE,
                             rug,
-                            ## boxplot=FALSE,
                             show.frequencies=FALSE,
                             plot=TRUE,
                             add=FALSE,
@@ -165,13 +164,9 @@ plotCalibration <- function(x,
                             na.action=na.fail,
                             cex=1,
                             ...){
-    if (x$response.type!="binary" && missing(cens.method)){
-        cens.method <- "local"
-        message("The default method for estimating calibration curves based on censored data has changed for riskRegression version 2019-9-8 or higher\nSet cens.method=\"jackknife\" to get the estimate using pseudo-values.\nHowever, note that the option \"jackknife\" is sensitive to violations of the assumption that the censoring is independent of both the event times and the covariates.\nSet cens.method=\"local\" to suppress this message.")
-    }
     
     # {{{ plot frame
-    model=risk=event=status=NULL
+    model=risk=riskRegression_event=riskRegression_status=NULL
     if (missing(ylab)){
         if (bars==TRUE){
             ylab=""
@@ -202,7 +197,10 @@ plotCalibration <- function(x,
     pframe <- x$Calibration$plotframe
     if (is.null(pframe))
         stop("Object has no information for calibration plot.\nYou should call the function \"riskRegression::Score\" with plots=\"calibration\".")
-    Rvar <- grep("^(ReSpOnSe|pseudovalue)$",names(pframe),value=TRUE)
+    if  (x$response.type %in% c("binary", "competing.risks"))
+        Rvar <- grep("^(riskRegression_event|pseudovalue)$",names(pframe),value=TRUE)[[1]]
+    else
+        Rvar <- grep("^(riskRegression_status|pseudovalue)$",names(pframe),value=TRUE)[[1]]
     if (!missing(models)){
         fitted.models <- pframe[,unique(model)]
         if (all(models%in%fitted.models)){
@@ -393,15 +391,17 @@ plotCalibration <- function(x,
                        groups <- q
                    }
                    xgroups <- (groups[-(length(groups))]+groups[-1])/2
-                   pcut <- cut(p,groups,include.lowest=TRUE)
+                   pcut <- cut(x = p,
+                               breaks = sort(unique(groups)),
+                               include.lowest=TRUE)
                    ## if (x$cens.type=="rightCensored"){
                    if (x$response.type=="binary"){
                        plotFrame=data.frame(Pred=tapply(p,pcut,mean),
                                             Obs=pmin(1,pmax(0,tapply(jackF,pcut,mean))))
                    }else{
                        if(x$response.type=="survival"){
-                           censcode <- pframe[status==0,status[1]]
-                           qfit <- prodlim::prodlim(prodlim::Hist(time,status,cens.code=censcode)~pcut,data=pframe)
+                           censcode <- pframe[riskRegression_status==0,riskRegression_status[1]]
+                           qfit <- prodlim::prodlim(prodlim::Hist(riskRegression_time,riskRegression_status,cens.code=censcode)~pcut,data=pframe)
                            plotFrame=data.frame(Pred=tapply(p,pcut,mean),
                                                 Obs=predict(qfit,
                                                             newdata=data.frame(pcut=levels(pcut)),
@@ -409,8 +409,8 @@ plotCalibration <- function(x,
                                                             mode="matrix",
                                                             times=tp,type="cuminc"))
                        }else{
-                           censcode <- pframe[status==0,event[1]]
-                           qfit <- prodlim::prodlim(prodlim::Hist(time,event,cens.code=censcode)~pcut,data=pframe)
+                           censcode <- pframe[riskRegression_status==0,riskRegression_event[1]]
+                           qfit <- prodlim::prodlim(prodlim::Hist(riskRegression_time,riskRegression_event,cens.code=censcode)~pcut,data=pframe)
                            n.cause <- match(x$cause,x$states)
                            plotFrame=data.frame(Pred=tapply(p,pcut,mean),
                                                 Obs=predict(qfit,
@@ -428,11 +428,11 @@ plotCalibration <- function(x,
                    ## to avoid memory explosion ...
                    ## a difference in the 3 digit should
                    ## not play a role for the single subject.
-                   if (round==TRUE){
+                   if (as.numeric(round)>0){
                        if (!is.null(bandwidth) && bandwidth[1]>=1){
                            ## message("No need to round predicted probabilities to calculate calibration in the large")
                        } else{
-                           p <- round(p,2)
+                           p <- round(p,round)
                        }
                    }
                    p <- na.omit(p)
@@ -460,11 +460,11 @@ plotCalibration <- function(x,
                                ## plotFrame=data.frame(Pred=tapply(p,pcut,mean),
                                ## Obs=pmin(1,pmax(0,tapply(jackF,pcut,mean))))
                            }else{
-                               ## local Kaplan-Meier/Aalen-Johansen 
+                               ## local Kaplan-Meier/Aalen-Johansen
                                if (cens.method=="local"){
                                    if(x$response.type=="survival"){
-                                       censcode <- pframe[status==0,status[1]]
-                                       pfit <- prodlim::prodlim(prodlim::Hist(time,status,cens.code=censcode)~p,data=pframe,bandwidth=bandwidth)
+                                       censcode <- pframe[riskRegression_status==0,riskRegression_status[1]]
+                                       pfit <- prodlim::prodlim(prodlim::Hist(riskRegression_time,riskRegression_status,cens.code=censcode)~p,data=pframe,bandwidth=bandwidth)
                                        plotFrame=data.frame(Pred=sort(unique(p)),
                                                             Obs=predict(pfit,
                                                                         newdata=data.frame(p=sort(unique(p))),
@@ -472,9 +472,9 @@ plotCalibration <- function(x,
                                                                         mode="matrix",
                                                                         times=tp,type="cuminc"))
                                    }else{
-                                       censcode <- pframe[status==0,event[1]]
+                                       censcode <- pframe[riskRegression_status==0,riskRegression_event[1]]
                                        ## pframe[,Event:=factor(event,levels=1:(length(x$states)+1),labels=c(x$states,censcode))]
-                                       pfit <- prodlim::prodlim(prodlim::Hist(time,event,cens.code=censcode)~p,data=pframe,bandwidth=bandwidth)
+                                       pfit <- prodlim::prodlim(prodlim::Hist(riskRegression_time,riskRegression_event,cens.code=censcode)~p,data=pframe,bandwidth=bandwidth)
                                        n.cause <- match(x$cause,x$states)
                                        plotFrame=data.frame(Pred=sort(unique(p)),
                                                             Obs=predict(pfit,

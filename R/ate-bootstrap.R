@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: apr 11 2018 (17:05) 
 ## Version: 
-## Last-Updated: Mar  7 2022 (08:36) 
+## Last-Updated: May 14 2025 (15:30) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 343
+##     Update #: 345
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -18,12 +18,12 @@
 ## * calcBootATE
 ## generate a boot object for the ate function that will be used to compute CI and p.values
 calcBootATE <- function(args, n.obs, fct.pointEstimate, name.estimate,
-                        handler, B, seed, mc.cores, cl,
-                        verbose){
+                        handler, B, seed, mc.cores, cl){
 
                                         # {{{ prepare arguments
     
     ## hard copy of the dataset before bootstrap
+    verbose <- args$verbose                        
     ls.data <- list(object.event = NULL,
                     object.treatment = NULL,
                     object.censor = NULL)
@@ -74,7 +74,7 @@ calcBootATE <- function(args, n.obs, fct.pointEstimate, name.estimate,
 
     ## packages and functions to be exported to the cluster
     add.Package <- unique(c("riskRegression","prodlim","data.table","parallel","survival",unlist(ls.package)))
-    add.Fct <- c("SurvResponseVar","predictRisk.coxphTD","predictRisk.CSCTD","ATE_COMPARISONS")
+    add.Fct <- c("SurvResponseVar","ATE_COMPARISONS")
     
     ## if cluster already defined by the user
     no.cl <- is.null(cl)
@@ -88,8 +88,8 @@ calcBootATE <- function(args, n.obs, fct.pointEstimate, name.estimate,
     }
     bootseeds <- sample(1:1000000,size=B,replace=FALSE)
     ## allArgs <- c("warperBootATE","data","n.obs","fct.pointEstimate",
-    ## "object","treatment","contrasts","times","cause","landmark",
-    ## "n.contrasts","levels","TD","name.estimate","formula","dots")
+    ## "object","treatment","contrasts","times","cause"
+    ## "n.contrasts","levels","name.estimate","formula","dots")
 
                                         # }}}
 

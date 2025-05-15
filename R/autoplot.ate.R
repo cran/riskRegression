@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: apr 28 2017 (14:19) 
 ## Version: 
-## last-updated: okt  7 2021 (20:54) 
-##           By: Brice Ozenne
-##     Update #: 191
+## last-updated: May 14 2025 (15:31) 
+##           By: Thomas Alexander Gerds
+##     Update #: 193
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -52,7 +52,6 @@
 ## * autoplot.ate (examples)
 #' @examples
 #' library(survival)
-#' library(rms)
 #' library(ggplot2)
 #' 
 #' #### simulate data ####
@@ -62,7 +61,7 @@
 #' seqTimes <- c(0,sort(dtS$time[dtS$event==1]),max(dtS$time))
 #' 
 #' #### Cox model ####
-#' fit <- cph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
+#' fit <- coxph(formula = Surv(time,event)~ X1+X2,data=dtS,y=TRUE,x=TRUE)
 #'
 #' #### plot.type = 1: for few timepoints ####
 #' ateFit <- ate(fit, data = dtS, treatment = "X1",
@@ -173,9 +172,6 @@ autoplot.ate <- function(object,
     dataL[,row := as.numeric(as.factor(.SD[[name.treatment]]))]
     if(ci){
         setnames(dataL, old = c("lower","upper"), new = c("lowerCI","upperCI"))
-    }
-    if(attr(object$estimator,"TD")){
-        dataL$time <- dataL$time + dataL$landmark
     }
     if(first.derivative && ci){
         attr(first.derivative,"vcov") <- attr(object[[type]],"vcov")[[estimator]]

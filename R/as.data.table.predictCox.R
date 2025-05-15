@@ -3,9 +3,9 @@
 ## Author: Thomas Alexander Gerds
 ## Created: Mar  3 2017 (09:28) 
 ## Version: 
-## Last-Updated: Sep  6 2023 (09:51) 
+## Last-Updated: Mar  3 2025 (13:00) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 173
+##     Update #: 178
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -19,13 +19,10 @@
 #' @title Turn predictCox Object Into a \code{data.table}
 #' @description Turn predictCox object into a \code{data.table}.
 #' @name as.data.table.predictCox
-#' 
 #' @param x object obtained with function \code{predictCox}
 #' @param keep.rownames Not used.
 #' @param se [logical] Should standard errors/quantile for confidence bands be displayed?
 #' @param ... Not used.
-
-
 ## * as.data.table.predictCox (code)
 #' @rdname as.data.table.predictCox
 #' @export
@@ -43,7 +40,7 @@ as.data.table.predictCox <- function(x, keep.rownames = FALSE, se = TRUE,...){
     
     if(is.null(x$times)){
         stop("Cannot convert to a data.table object when times is missing in object \n",
-             "set the argument \'keep.time\' to TRUE when calling the predict method \n")
+             "set the argument \'keep.times\' to TRUE when calling the predict method \n")
     }
     if(!is.matrix(x[[x$type[1]]])){ ## baseline hazard
         out <- as.data.table(x[c("times",x$type)])

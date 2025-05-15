@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (06:48) 
 ## Version: 
-## last-updated: okt  7 2021 (10:18) 
-##           By: Brice Ozenne
-##     Update #: 552
+## last-updated: May 14 2025 (15:30) 
+##           By: Thomas Alexander Gerds
+##     Update #: 589
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -40,11 +40,11 @@ print.ate <- function(x, estimator = x$estimator, ...){
     estimator.print <- sapply(attr(estimator,"full"),
                               switch,
                               "GFORMULA" = "G-formula",
-                              "GFORMULATD" = "G-formula with time-dependent covariates)",
                               "IPTW,IPCW" = "Inverse probability of treatment weighting",
                               "IPTW" = "Inverse probability of treatment weighting",
-                              "AIPTW,AIPCW" = "Augmented estimator",
-                              "AIPTW" = "Augmented estimator")
+                              "AIPTW,IPCW" = "Partially augmented estimator",
+                              "AIPTW,AIPCW" = "Augmented and double robust estimator",
+                              "AIPTW" = "Augmented and double robust estimator")
 
 
     ## ** prepare
@@ -72,9 +72,9 @@ print.ate <- function(x, estimator = x$estimator, ...){
     }
     ## number at risk at the evaluation time
     if(!is.na(x$variable["time"])){
-        M.at.risk <- cbind("- Eval. time       "="number at risk",attr(x$eval.times,"n.at.risk"))
+        M.at.risk <- cbind("- at risk/time       "="number in treatment",attr(x$eval.times,"n.at.risk"))
         colnames(M.at.risk)[2] <- " :"
-        M.at.risk[,2] <- paste(as.character(M.at.risk[[2]]),"  ",sep="")
+        M.at.risk[,2] <- paste(as.character(M.at.risk[[2]]),sep="")
     }
     
     ## statistical inference
@@ -120,11 +120,11 @@ print.ate <- function(x, estimator = x$estimator, ...){
     cat(" - Event                : ",x$var["event"]," (",txt.eventvar,")\n",sep="")
     if(!is.na(x$var["time"])){
         cat(" - Time  [min;max]      : ",x$var["time"]," [",signif(attr(x$var,"range.time")[1],3),";",signif(attr(x$var,"range.time")[2], 3),"]\n",sep="")
-        print(M.at.risk, row.names = FALSE)        
+        print(M.at.risk, row.names = FALSE, class = FALSE)        
     }
     
     cat("\n Estimation procedure \n")
-    cat(" - Estimator",if(length(estimator.print)>1){"s"}else{" "}," : ",paste(estimator.print, collapse = " "),"\n",sep="")
+    cat(" - Estimator",if(length(estimator.print)>1){"s"}else{" "}," : ",paste(estimator.print, collapse = ", "),"\n",sep="")
     if(test.inference){
         cat(" - Uncertainty: ", txt.inference,sep="")
     }
@@ -160,7 +160,7 @@ print.ate <- function(x, estimator = x$estimator, ...){
         }else{
             cat(" - Standardized risks   :    [min;max]   \n")
         }        
-        print(dt.res, row.names = FALSE)
+        print(dt.res, row.names = FALSE, class = FALSE)
 
         cat("\n")
         

@@ -19,9 +19,10 @@
 #' regression models for all causes.  If \code{"survival"} fit one
 #' cause-specific Cox regression model for the cause of interest and
 #' also a Cox regression model for event-free survival.
-#' @param fitter Routine to fit the Cox regression models.
-#' If \code{coxph} use \code{survival::coxph} else use \code{rms::cph}.
-#' @param ... Arguments given to \code{fitter}, e.g., \code{coxph}.
+#' @param fitter Character string specifying the routine to fit the Cox regression models. Available are
+#' \code{"coxph"} for \link[survival]{coxph}, \code{"coxph"} for \link[rms]{cph},
+#' \code{"phreg"} for \link[mets]{phreg}, and \code{"glmnet"} for \link[glmnet]{glmnet}.
+#' @param ... Arguments given to the function defined by argument \code{fitter}.
 #' @return \item{models }{a list with the fitted (cause-specific) Cox
 #' regression objects} \item{response }{the event history response }
 #' \item{eventTimes }{the sorted (unique) event times } \item{surv.type }{the
@@ -40,23 +41,40 @@
 #' competing risks: Interpretation, link functions, and prediction. Statistics
 #' in Medicine, 31(29):3921--3930, 2012.
 #'
-#' @seealso \code{\link{coxph}}
+#' @seealso \code{\link[survival]{coxph}}
 #' @keywords survival
 #' @examples
 #'
-##' library(prodlim)
-##' library(survival)
-##' data(Melanoma)
-##' ## fit two cause-specific Cox models
-##' ## different formula for the two causes
-##' fit1 <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
-##'             data=Melanoma)
-##' print(fit1)
+#' library(prodlim)
+#' library(survival)
+#' data(Melanoma)
+#' ## fit two cause-specific Cox models
+#' ## different formula for the two causes
+#' fit1 <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
+#'             data=Melanoma)
+#' print(fit1)
+#'
+#' \dontrun{
+#' library(rms)
+#' fit1a <- CSC(list(Hist(time,status)~sex+rcs(age,3),Hist(time,status)~invasion+epicel+log(thick)),
+#'             data=Melanoma,fitter="cph")
+#' print(fit1a)
+#' }
+#' \dontrun{
+#' library(glmnet)
+#' # lasso
+#' fit1b <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
+#'             data=Melanoma,fitter="glmnet")
+#' # rigde regression
+#' fit1c <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
+#'             data=Melanoma,fitter="glmnet")
+#' print(fit1b)
+#' }
 ##' \dontrun{
 ##' library(Publish)
 ##' publish(fit1)
 ##' }
-##'
+##' 
 ##' ## model hazard of all cause mortality instead of hazard of type 2
 ##' fit1a <- CSC(list(Hist(time,status)~sex+age,Hist(time,status)~invasion+epicel+log(thick)),
 ##'              data=Melanoma,
@@ -122,13 +140,17 @@
 ##' fit5.2 <- CSC(Hist(time,status)~invasion+epicel+age+strata(sex),
 ##'             data=Melanoma,
 ##'             surv.type="surv",cause=2)
-##' ## now this does not work
-##' try(predictRisk(fit5.2,cause=1,newdata=Melanoma,times=4))
+##' ## now this does not work because the object was fitted with surv.type='surv'
+##' try(predictRisk(fit5.2,cause=1,newdata=Melanoma,times=4000))
 ##'
 ##' ## but this does
 ##' predictRisk(fit5.2,cause=2,newdata=Melanoma,times=100)
 ##' predict(fit5.2,cause=2,newdata=Melanoma,times=100)
 ##' predict(fit5.2,cause=2,newdata=Melanoma[4,],times=100)
+##'
+##' fit5.2 <- CSC(Hist(time,status)~invasion+epicel+age+strata(sex),
+##'             data=Melanoma,
+##'             surv.type="hazard",cause=2)
 ##'
 #' @export
 CSC <- function(formula,
@@ -136,9 +158,8 @@ CSC <- function(formula,
                 cause,
                 surv.type="hazard",
                 fitter="coxph",
-                ## strip.environment
                 ...){
-    fitter <- match.arg(fitter,c("coxph","cph","phreg"))
+    fitter <- match.arg(fitter,c("coxph","cph","phreg", "glmnet"))
     # {{{ type
     surv.type <- match.arg(surv.type,c("hazard","survival"))
     # }}}
@@ -247,10 +268,10 @@ CSC <- function(formula,
         ## check whether right hand side of formula includes ~.
         allvars <- all.vars(formula[[x]])
         if (any(grepl("^\\.$",allvars))){
-          formulaXX <- as.formula(paste0(survresponse,"~."))
+            formulaXX <- as.formula(paste0(survresponse,"~."))
         }
         else {
-          formulaXX <- update(formula[[x]],paste0(survresponse,"~."))
+            formulaXX <- update(formula[[x]],paste0(survresponse,"~."))
         }
         # previous
         # formulaXX <- update(formula[[x]],paste0(survresponse,"~."))
@@ -265,6 +286,8 @@ CSC <- function(formula,
             fit <- do.call("cph",c(args,list(surv=TRUE,x=TRUE,y=TRUE),extra.args))
         } else if(fitter=="phreg") {
             fit <- do.call("phreg",c(args,extra.args))
+        } else if(fitter=="glmnet"){
+            fit <- do.call("GLMnet", c(args, extra.args))
         }
         ## fit$formula <- terms(fit$formula)
         ## fit$call$formula <- terms(formulaXX)
