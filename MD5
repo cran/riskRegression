@@ -1,4 +1,4 @@
-1e7f56a9997c3706811f7e80056a63f9 *DESCRIPTION
+3b34d9036ccc17e423fd88270a1a7d38 *DESCRIPTION
 2aec369b057b45108f01bdbdbb9a4004 *NAMESPACE
 769b178e63d938056168babae0055d26 *R/0onload.R
 ec88fb840854454f40263b1d0944e0a0 *R/ARR.R
@@ -10,7 +10,7 @@ da2a80713223737553cd79046d03e80a *R/AUC.binary.R
 99340912733f8c4b676048adcb2dd1d1 *R/Brier.survival.R
 4e6fab1eb2b9af0cbd21f68833ca9eb3 *R/CSC.R
 5b696b5282deae3d0b341cdb66ea8ce0 *R/FGR.R
-3898dd2ddffa6df3f7363b8b1227c786 *R/GLMnet.R
+16a7cfc88aa5d75a4639597fadddfe8e *R/GLMnet.R
 d2cacc9d436ee13d1dcb93f2dda3857b *R/HAL9001.R
 e7954a037e652bb525dc0ec882c93d69 *R/IPA.R
 bbcc961b313f7544520862b121c107f0 *R/LRR.R
@@ -274,7 +274,7 @@ c7ef41d11f044027761c9090c1e3cf73 *src/Makevars
 049146b5aadff688405d95e8a7ca64d9 *src/Makevars.win
 f7cbb3374a9f2c8fde063f631e999aa8 *src/RcppExports.cpp
 dd10ce6c0f438b56be63df09b9b7f212 *src/aucLoobFun.cpp
-24e93322e707a5d60a4dd08df1ad21b1 *src/baseHaz.cpp
+4783f73975430af17623ac7afc0288c3 *src/baseHaz.cpp
 7cfc96218ecd240db4262a9187f179e5 *src/calcSeCSC.cpp
 81a33bba19872dafa113be528bdde8a9 *src/calcSeCox.cpp
 43da39df259b71cb95b7647bc44ca0ac *src/calculateDelongCovarianceMatrix.cpp
