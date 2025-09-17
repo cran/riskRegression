@@ -21,7 +21,7 @@ Useful links:
 Authors:
 \itemize{
   \item Johan Sebastian Ohlendorff
-  \item Brice Ozenne \email{broz@sund.ku.dk} (\href{https://orcid.org/0000-0001-9694-2956}{ORCID})
+  \item Brice Ozenne \email{broz@sund.ku.dk}
 }
 
 Other contributors:
@@ -32,6 +32,7 @@ Other contributors:
   \item Nikolaj Tollenaar [contributor]
   \item John Muschelli [contributor]
   \item Ulla Brasch Mogensen [contributor]
+  \item Asbjørn Risom \email{ar@math.ku.dk} [contributor]
 }
 
 }

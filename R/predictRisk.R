@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02)
 ## Version:
-## last-updated: May 14 2025 (17:23) 
+## last-updated: Jul  7 2025 (15:31) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 624
+##     Update #: 634
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -143,7 +143,7 @@
 #'
 #' @export
 predictRisk <- function(object,newdata,...){
-    UseMethod(generic = "predictRisk",object = object)
+        UseMethod(generic = "predictRisk",object = object)
 }
 
 ## * predictRisk.default
@@ -726,7 +726,6 @@ predictRisk.prodlim <- function(object,
 
     ## ** export
     return(p)
-
 }
 
 ## * predictRisk.survfit
@@ -858,7 +857,7 @@ predictRisk.rfsrc <- function(object, newdata, times, cause, ...){
     if (missing(times)||is.null(times)){
         p <- stats::predict(object,newdata=newdata,importance="none",...)$predicted
         if (NCOL(p)>1)
-        p <- as.numeric(p[,2,drop=TRUE])
+            p <- as.numeric(p[,2,drop=TRUE])
         p
     }else{
         if (object$family[[1]]=="surv") {
@@ -1324,7 +1323,8 @@ predictRisk.GLMnet <- function(object,
                                product.limit = FALSE,
                                diag = FALSE,
                                ...){
-    has_survival <- inherits(object$fit,"coxnet")
+    has_survival <- (inherits(object$fit,"coxnet")||
+                     (inherits(object$fit,"cv.glmnet") && inherits(object$fit$glmnet.fit,"coxnet")))
     dots <- list(...)
     type <- dots$type ## hidden argument for ate
     if (has_survival){

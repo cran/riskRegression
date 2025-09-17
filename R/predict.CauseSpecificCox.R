@@ -215,7 +215,7 @@ predict.CauseSpecificCox <- function(object,
         cause <- object$theCause
     }
     if (length(cause) > 1){
-        stop(paste0("Can only predict one cause. Provided are: ", 
+        stop(paste0("Length of argument cause is longer than 1. Can only predict a single cause. The object contains the following causes: ", 
                     paste(cause, collapse = ", "), sep = ""))
     }
 	

@@ -3,9 +3,9 @@
 ## author: Brice Ozenne
 ## created: maj 27 2017 (11:46) 
 ## Version: 
-## last-updated: Oct 20 2024 (13:50) 
-##           By: Brice Ozenne
-##     Update #: 950
+## last-updated: sep  7 2025 (08:14) 
+##           By: Thomas Alexander Gerds
+##     Update #: 959
 #----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -70,7 +70,7 @@ calcSeCox <- function(object, times, nTimes, type, diag,
                       Lambda0, object.n, object.time, object.eXb, object.strata, nStrata,
                       new.n, new.eXb, new.LPdata, new.strata, new.survival, 
                       nVar.lp, export, store.iid){
-    
+
     ## ** Computation of the influence function
     if(is.iidCox(object)){
         store.iid <- object$iid$store.iid
