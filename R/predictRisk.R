@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02)
 ## Version:
-## last-updated: Jul  7 2025 (15:31) 
+## last-updated: feb 16 2026 (09:57) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 634
+##     Update #: 641
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -551,6 +551,60 @@ predictRisk.comprisk <- function(object, newdata, times, ...) {
   return(out)
 }
 
+## * predictRisk.survreg
+##' @export
+##' @rdname predictRisk
+##' @method predictRisk survreg
+predictRisk.survreg <- function(object,
+                                newdata,
+                                times,
+                                ...) {
+
+  if (missing(newdata)) stop("newdata must be supplied")
+  if (missing(times)) stop("times must be supplied")
+
+  lp    <- predict(object, newdata = newdata, type = "lp")
+  sigma <- object$scale
+  dist  <- object$dist
+
+  n  <- length(lp)
+  nt <- length(times)
+
+    ## subject-specific LP, common time grid
+    LP    <- matrix(lp, n, 1)
+    TIMES <- matrix(times, n, nt, byrow = TRUE)
+
+    risk <- switch(
+        dist,
+        weibull = {
+            shape <- 1 / sigma
+            scale <- exp(LP)
+            stats::pweibull(TIMES, shape = shape, scale = scale)
+        },
+
+    lognormal = {
+      stats::plnorm(TIMES, meanlog = LP, sdlog = sigma)
+    },
+
+    loglogistic = {
+      shape <- 1 / sigma
+      scale <- exp(LP)
+      z <- (TIMES / scale)^shape
+      z / (1 + z)
+    },
+
+    exponential = {
+      rate <- exp(-LP)
+      stats::pexp(TIMES, rate = rate)
+    },
+
+    stop("Distribution '", dist, "' not supported")
+  )
+
+  colnames(risk) <- times
+  risk
+}
+
 
 ## * predictRisk.coxph
 ##' @export
@@ -606,16 +660,34 @@ predictRisk.coxph <- function(object,
 
 
 
+
 ## * predictRisk.coxph.penal
 ##' @export
 ##' @rdname predictRisk
 ##' @method predictRisk coxph.penal
-predictRisk.coxph.penal <- function(object,newdata,times,...){
-    # assume that only one cluster/sparse penalty is allowed 
+predictRisk.coxph.penal <- function(object,
+                                    newdata,
+                                    times,
+                                    product.limit = FALSE,
+                                    diag = FALSE,
+                                    iid = FALSE,
+                                    average.iid = FALSE,
+                                    ...){
+    ## assume that only one cluster/sparse penalty is allowed
     frailhistory <- object$history[[1]]$history
-    if (length(frailhistory) == 0){
-        predictRisk.coxph(object,newdata,times,...)
+    
+    ## if (length(frailhistory) == 0){ ## old version
+    if (length(frailhistory) == 0 || all(grepl("pspline",names(object$history), fixed = TRUE))){
+        ## in case penalty terms correspond to p-splines, use the 'usual' predictRisk
+        predictRisk.coxph(object,newdata,times,  product.limit = product.limit,
+                          diag = diag, iid = iid, average.iid = average.iid, ...)
     }else{
+        if(product.limit==TRUE){
+            warning("Argument \'product.limit\' is ignored with frailty Cox models. \n")
+        }
+        if(diag==TRUE){
+            warning("Argument \'diag\' is ignored with frailty Cox models. \n")
+        }
         frailVar <- frailhistory[NROW(frailhistory),1]
         linearPred <- predict(object,newdata=newdata,se.fit=FALSE,conf.int=FALSE)
         basehaz <- basehaz(object)

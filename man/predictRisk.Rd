@@ -33,6 +33,7 @@
 \alias{predictRisk.formula}
 \alias{predictRisk.BinaryTree}
 \alias{predictRisk.comprisk}
+\alias{predictRisk.survreg}
 \alias{predictRisk.coxph.penal}
 \alias{predictRisk.ranger}
 \alias{predictRisk.penfitS3}
@@ -85,6 +86,8 @@ predictRisk(object, newdata, ...)
 
 \method{predictRisk}{comprisk}(object, newdata, times, ...)
 
+\method{predictRisk}{survreg}(object, newdata, times, ...)
+
 \method{predictRisk}{coxph}(
   object,
   newdata,
@@ -96,7 +99,16 @@ predictRisk(object, newdata, ...)
   ...
 )
 
-\method{predictRisk}{coxph.penal}(object, newdata, times, ...)
+\method{predictRisk}{coxph.penal}(
+  object,
+  newdata,
+  times,
+  product.limit = FALSE,
+  diag = FALSE,
+  iid = FALSE,
+  average.iid = FALSE,
+  ...
+)
 
 \method{predictRisk}{cph}(
   object,
