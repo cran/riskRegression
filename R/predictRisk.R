@@ -3,9 +3,9 @@
 ## author: Thomas Alexander Gerds
 ## created: Jun  6 2016 (09:02)
 ## Version:
-## last-updated: feb 16 2026 (09:57) 
+## last-updated: mar 11 2026 (12:55) 
 ##           By: Thomas Alexander Gerds
-##     Update #: 641
+##     Update #: 665
 #----------------------------------------------------------------------
 ##
 ### Commentary:
@@ -289,8 +289,7 @@ predictRisk.glm <- function(object, newdata, iid = FALSE, average.iid = FALSE,..
                 }
             }
         }
-        ## print(sum(abs(attr(out,"average.iid")[[1]])))
-        return(out)
+         return(out)
     } else {
         stop("Currently only the binomial family is implemented for predicting a status from a glm object.")
     }
@@ -601,10 +600,11 @@ predictRisk.survreg <- function(object,
     stop("Distribution '", dist, "' not supported")
   )
 
-  colnames(risk) <- times
-  risk
+    colnames(risk) <- times
+    risk
 }
 
+## NOTE: add these when mets has removed predictRisk
 
 ## * predictRisk.coxph
 ##' @export
@@ -1394,44 +1394,56 @@ predictRisk.GLMnet <- function(object,
                                times,
                                product.limit = FALSE,
                                diag = FALSE,
-                               ...){
-    has_survival <- (inherits(object$fit,"coxnet")||
-                     (inherits(object$fit,"cv.glmnet") && inherits(object$fit$glmnet.fit,"coxnet")))
+                               ...) {
+
     dots <- list(...)
-    type <- dots$type ## hidden argument for ate
-    if (has_survival){
-        pred <- 1-predictCox(object=object,
-                             newdata=newdata,
-                             times=times,
-                             iid = FALSE,
-                             confint = FALSE,
-                             diag = diag,
-                             average.iid = FALSE,
-                             product.limit = product.limit,
-                             type="survival")$survival
-        if(identical(type,"survival")){
-            pred <- 1-pred
-        }
+    has_survival <- (inherits(object$fit, "coxnet") ||
+                     (inherits(object$fit, "cv.glmnet") && inherits(object$fit$glmnet.fit, "coxnet")))
+    if (has_survival) {
+        ## keep existing survival pipeline
+        pred <- 1 - predictCox(
+                        object = object,
+                        newdata = newdata,
+                        times = times,
+                        iid = FALSE,
+                        confint = FALSE,
+                        diag = diag,
+                        average.iid = FALSE,
+                        product.limit = product.limit,
+                        type = "survival"
+                    )$survival
         if (NROW(pred) != NROW(newdata) || NCOL(pred) != length(times)) {
-            stop(paste("\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ", NROW(newdata), " x ", length(times), "\nProvided prediction matrix: ", NROW(pred), " x ", NCOL(pred), "\n\n", sep = ""))
+            stop(paste(
+                "\nPrediction matrix has wrong dimensions:\nRequested newdata x times: ",
+                NROW(newdata), " x ", length(times),
+                "\nProvided prediction matrix: ", NROW(pred), " x ", NCOL(pred),
+                "\n\n", sep = ""
+            ))
         }
-        pred
+        return(pred)
     }else{
         ff <- stats::formula(stats::delete.response(object$terms))
-        newdata <- Publish::specialFrame(formula = ff,
-                                         data = newdata,
-                                         strip.specials = c("unpenalized"),
-                                         strip.arguments = NULL,
-                                         specials = c("unpenalized"),
-                                         unspecials.design = TRUE,
-                                         specials.design = TRUE,
-                                         response = FALSE)
-        if (NCOL(newdata$unpenalized)>0){
-            newX <- cbind(newdata$design,newdata$unpenalized)
-        }else{
-            newX <- newdata$design
+        newdata <- prodlim::EventHistory.frame(
+                                formula = ff,
+                                check.formula = FALSE,
+                                data = newdata,
+                                unspecialsDesign = TRUE,
+                                specialsDesign = TRUE,
+                                stripSpecials = c("unpenalized", "strata", "pen", "rcs"),
+                                stripArguments=list("pen"=list("pf" = 1),"unpenalized"=NULL,"rcs"=list("nknots" = 3,"pen" = 2),"strata" = NULL),
+                                specials = c("strata", "unpenalized", "pen", "rcs"),
+                                response = FALSE)
+        newX <- cbind(newdata$design,newdata$pen,newdata$unpenalized)
+        if (!is.null(newdata$rcs)) {
+            for (v in colnames(newdata$rcs)){
+                if (!(v %in% names(object$rcs.parameters))){
+                    stop(paste0("riskRegression::predictRisk.GLMnet: cannot find knot parameters to restricted cubic spline terms of variable ",v))
+                }
+                v_X <- Hmisc::rcspline.eval(newdata$rcs[,v],knots = object$rcs.parameters[[v]],inclx = TRUE)
+                newX <- cbind(newX,v_X)
+            }
         }
-        p <- predict(object$fit,newx=newX,type = "response", s=object$selected.lambda)
+        p <- as.numeric(stats::predict(object$fit, newx = newX, type = "response", s = object$selected.lambda))
         p
     }
 }
